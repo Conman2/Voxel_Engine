@@ -3,102 +3,78 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 
-//Global Constants (SI Units)
-float universal_gas_constant = 286.97f;
-float troposhere_temperature_constant = 0.00651f; 
-float temperature_kelvin = 273.15f; 
-float ratio_specfic_heat = 1.4f; //Assumed constant 
-float troposhere_altitude = 11000.0f; 
-float gravity = 9.81f; 
+//Vector Data Structure
+struct vec 
+{
+    float x = 0; 
+    float y = 0; 
+    float z = 0;
+    float w = 1;
+};
 
-//Sea Level Conditions 
-float sea_level_temperature = 288.16f;
-float sea_level_pressure = 101325.0f;
-float sea_level_density = 1.225f; 
-
-//World State  Variables 
-const int screen_width = 1000;
-const int screen_height = 1000;
-const float camera_view_angle = 90; 
-const float z_max_distance = 1000;
-const float z_min_distance = 0.1;
-
-//Game Run Condition
-int run = 1; 
-
-//These Classes are used to store Data Structures and Functions 
 //The Vector Class
-class vect
+class vector
 {   
     public:
-        float i = 0; 
-        float j = 0; 
-        float k = 0;
-        float w = 1;
-        
+    
         //Vector Adding 
-        vect add(vect vector1, vect vector2)
+        vec add(vec vector1, vec vector2)
         {
-            return {vector1.i + vector2.i, vector1.j + vector2.j, vector1.k + vector2.k, 1};
+            return {vector1.x + vector2.x, vector1.y + vector2.y, vector1.z + vector2.z, 1};
         }
 
         //Vector Subtracting 
-        vect subtract(vect vector1, vect vector2)
+        vec subtract(vec vector1, vec vector2)
         {
-            return {vector1.i - vector2.i, vector1.j - vector2.j, vector1.k - vector2.k, 1};
+            return {vector1.x - vector2.x, vector1.y - vector2.y, vector1.z - vector2.z, 1};
         }
 
         //Vector Multiplication with Constant
-        vect multiply(vect vector, float constant)
+        vec multiply(vec vector, float constant)
         {
-            return {vector.i * constant, vector.j * constant, vector.k * constant, 1};
+            return {vector.x * constant, vector.y * constant, vector.z * constant, 1};
         }
 
-        vect divide(vect vector, float constant)
+        vec divide(vec vector, float constant)
         {
-            return {vector.i / constant, vector.j / constant, vector.k / constant, 1};
+            return {vector.x / constant, vector.y / constant, vector.z / constant, 1};
         }
 
         //Dot Product 
-        float dot_product(vect vector1, vect vector2)
+        float dot_product(vec vector1, vec vector2)
         {
-            return {vector1.i * vector2.i + vector1.j * vector2.j + vector1.k * vector2.k}; 
+            return {vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z}; 
         }
 
         //Cross Product
-        vect cross_product(vect vector1, vect vector2)
+        vec cross_product(vec vector1, vec vector2)
         {   
-            return {vector1.j * vector2.k - vector1.k * vector2.j, vector1.k * vector2.i - vector1.i * vector2.k, vector1.i * vector2.j - vector1.j * vector2.i, 1};
+            return {vector1.y * vector2.z - vector1.z * vector2.y, vector1.z * vector2.x - vector1.x * vector2.z, vector1.x * vector2.y - vector1.y * vector2.x, 1};
         }
 
         //Normalization
-        void normalize(vect vector)
+        void normalize(vec vector)
         {   
-            float length = pow(pow(vector.i, 2) + pow(vector.j, 2) + pow(vector.k, 2), 0.5);
+            float length = pow(pow(vector.x, 2) + pow(vector.y, 2) + pow(vector.z, 2), 0.5);
 
             vector = divide(vector, length);
         }
 };
 
 //The Vector Class
-class quat
+class quaternion
 {
     public:
-        float x = 0; 
-        float y = 0; 
-        float z = 0;
-        float w = 1;
-
         //Multiplying two quaternions using Hamilton Product  
-        quat divide(quat quaternion, float constant)
+        vec divide(vec quaternion, float constant)
         {   
             return {quaternion.x / constant, quaternion.y / constant, quaternion.z / constant, 1};
         };
 
         //Multiplying two quaternions using Hamilton Product  
-        quat multiply(quat quaternion1, quat quaternion2)
+        vec multiply(vec quaternion1, vec quaternion2)
         {   
-            quat result;
+            vec result;
 
             result.x = (quaternion1.w*quaternion2.x + quaternion1.x*quaternion2.w + quaternion1.y*quaternion2.z - quaternion1.z*quaternion2.y);
             result.y = (quaternion1.w*quaternion2.y - quaternion1.x*quaternion2.z + quaternion1.y*quaternion2.w + quaternion1.z*quaternion2.x);
@@ -109,7 +85,7 @@ class quat
         };
 
         //Normalization
-        void normalize(quat vector)
+        void normalize(vec vector)
         {   
             float length = pow(pow(vector.x, 2) + pow(vector.y, 2) + pow(vector.z, 2) + pow(vector.w, 2), 0.5);
 
@@ -117,14 +93,14 @@ class quat
         }
 
         //The basic quaternion structure 
-        quat structure(vect axis, float angle)
+        vec structure(vec axis, float angle)
         {   
-            quat quaternion;
+            vec quaternion;
 
-            quaternion.x = axis.i * sinf( angle/2 );
-            quaternion.y = axis.j * sinf( angle/2 );
-            quaternion.z = axis.k * sinf( angle/2 );
-            quaternion.w = cosf( angle/2 );
+            quaternion.x = axis.x * sinf( angle/2 );
+            quaternion.y = axis.y * sinf( angle/2 );
+            quaternion.z = axis.z * sinf( angle/2 );
+            quaternion.w = cosf( angle/2);
 
             normalize(quaternion);
 
@@ -132,17 +108,8 @@ class quat
         };
 
         //Seting up the new global rotation based on input axis, change in angles and total quaternion
-        quat setup(quat total_quaternion, vect angle, vect x_axis, vect y_axis, vect z_axis)
+        vec setup(vec total_quaternion, vec angle, vec x_axis, vec y_axis, vec z_axis)
         {   
-            quat quaternion_x = structure(x_axis, angle.i);
-            quat quaternion_y = structure(y_axis, angle.j);
-            quat quaternion_z = structure(z_axis, angle.k);
-
-            //Multiplying change in quaternion by universal quaternion then rotating point
-            quat quaternion = multiply(multiply(multiply(quaternion_z, quaternion_y), quaternion_x), total_quaternion);
-
-            return quaternion;
-
             /* This Way Does it all at once and more efficiently and should be reimplented 
             //precompute to save on processing time
             float cosX = cos( angle[1] / 2 );
@@ -159,74 +126,70 @@ class quat
             result[3] = cosX * cosY * sinZ + sinX * sinY * cosZ;
             */
 
+            vec quaternion_x = structure(x_axis, angle.x);
+            vec quaternion_y = structure(y_axis, angle.y);
+            vec quaternion_z = structure(z_axis, angle.z);
+
+            //Multiplying change in quaternion by universal quaternion then rotating point
+            vec quaternion = multiply(multiply(multiply(quaternion_z, quaternion_y), quaternion_x), total_quaternion);
+
+            return quaternion;
         };
 
         //Provides the conjugate of a quaternion
-        quat conjugatation(quat quaternion)
+        vec conjugatation(vec quaternion)
         {
             return {-quaternion.x, -quaternion.y, -quaternion.z, quaternion.w};
         };
 
-        //Converting a Vector into a quaternion to match Data Types 
-        quat quaternion_from_vector(vect vector)
-        {
-            return{vector.i, vector.j, vector.k, vector.w};
-        };
-
-        //Converting a Vector into a quaternion to match Data Types 
-        vect vector_from_quaternion(quat quaternion)
-        {
-            return{quaternion.x, quaternion.y, quaternion.z, quaternion.w};
-        };
-
-
         //Rotates a point or vector based on: R = P*Q*P^-1
-        vect rotation(quat quaternion, vect position)
-        {   
-            quat conjugate = conjugatation(quaternion);
+        vec rotation(vec quaternion, vec position)
+        {
+            vec conjugate = conjugatation(quaternion);
+            vec rotated = multiply(multiply(quaternion, position), conjugate);
 
-            return(vector_from_quaternion(multiply(multiply(quaternion, quaternion_from_vector(position)), conjugate)));
+            return(rotated);
         }; 
 };
 
 //The Matrix Class
-class mat 
+class matrix 
 {
     public:
         //Declaring the vector class
-        vect vector;
+        vector vect;
 
         //Matrix Vector Multiplication (note that with this function input and output must be different variables)
-        vect vector_multiplication(vect vector, float matrix[4][4])
+        vec vector_multiplication(vec vector, float matrix[4][4])
         {   
-            vect result;
+            vec result;
 
-            result.i = vector.i* matrix[0][0] + vector.j * matrix[0][1] + vector.k * matrix[0][2] + vector.w * matrix[0][3];
-            result.j = vector.i* matrix[1][0] + vector.j * matrix[1][1] + vector.k * matrix[1][2] + vector.w * matrix[1][3];
-            result.k = vector.i* matrix[2][0] + vector.j * matrix[2][1] + vector.k * matrix[2][2] + vector.w * matrix[2][3];
-            result.w = vector.i* matrix[3][0] + vector.j * matrix[3][1] + vector.k * matrix[3][2] + vector.w * matrix[3][3];
+            result.x = vector.x* matrix[0][0] + vector.y * matrix[0][1] + vector.z * matrix[0][2] + vector.w * matrix[0][3];
+            result.y = vector.x* matrix[1][0] + vector.y * matrix[1][1] + vector.z * matrix[1][2] + vector.w * matrix[1][3];
+            result.z = vector.x* matrix[2][0] + vector.y * matrix[2][1] + vector.z * matrix[2][2] + vector.w * matrix[2][3];
+            result.w = vector.x* matrix[3][0] + vector.y * matrix[3][1] + vector.z * matrix[3][2] + vector.w * matrix[3][3];
 
             return result;
         }
 
         //Look at Matrix
-        void lookat(float matrix[4][4], vect camera_position, vect camera_direction, vect world_up, vect camera_right)
+        void lookat(float matrix[4][4], vec camera_position, vec camera_direction, vec world_up, vec camera_right)
         {
             // //Calculating the Camera Looking Direction
-            //vect camera_direction = vector_subtract(camera_position, camera_target); 
+            //vec camera_direction = vector_subtract(camera_position, camera_target); 
             //vector_normalize(camera_direction);
 
             //Calculating new up
-            vect camera_up = vector.subtract(vector.multiply(camera_direction, vector.dot_product(world_up, camera_direction)), world_up);//Might need t0 be reversed
-            vector.normalize(camera_up);
+            vec camera_up = vect.subtract(vect.multiply(camera_direction, vect.dot_product(world_up, camera_direction)), world_up);//Might need t0 be reversed
+            vect.normalize(camera_up);
 
             //Calculating Camera Right Direction
-            //vect camera_right = cross_product(camera_up, camera_direction);
+            //vec camera_right = cross_product(camera_up, camera_direction);
 
             //Look At Matrix 
-            matrix[0][0] = camera_right.i;     matrix[0][1] = camera_right.j;     matrix[0][2] = camera_right.k;     matrix[0][3] = -vector.dot_product(camera_right, camera_position);
-            matrix[1][0] = camera_up.i;        matrix[1][1] = camera_up.j;        matrix[1][2] = camera_up.k;        matrix[1][3] = -vector.dot_product(camera_up, camera_position);
-            matrix[2][0] = camera_direction.i; matrix[2][1] = camera_direction.j; matrix[2][2] = camera_direction.k; matrix[2][3] = -vector.dot_product(camera_direction, camera_position);
+            matrix[0][0] = camera_right.x;     matrix[0][1] = camera_right.y;     matrix[0][2] = camera_right.z;     matrix[0][3] = -vect.dot_product(camera_right, camera_position);
+            matrix[1][0] = camera_up.x;        matrix[1][1] = camera_up.y;        matrix[1][2] = camera_up.z;        matrix[1][3] = -vect.dot_product(camera_up, camera_position);
+            matrix[2][0] = camera_direction.x; matrix[2][1] = camera_direction.y; matrix[2][2] = camera_direction.z; matrix[2][3] = -vect.dot_product(camera_direction, camera_position);
             matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1; 
         }
 
@@ -341,298 +304,87 @@ class propulsion
 //The Object Class Used to track a object in the world space 
 class object
 {
-    private:
+    private: 
         //The Universal Up, Foward and Right
-        vect world_right  = {1, 0, 0, 0};
-        vect world_up     = {0, 1, 0, 0};
-        vect world_foward = {0, 0, 1, 0};
+        vec world_right  = {1, 0, 0, 0};
+        vec world_up     = {0, 1, 0, 0};
+        vec world_foward = {0, 0, 1, 0};
 
-        vect world_origin = {0, 0, 0, 0};
+        vec world_origin = {0, 0, 0, 0};
 
     public:
         //To acess vector and Quaternion Functions 
-        vect vector; 
-        quat quater;
+        vector vect; 
+        quaternion quat;
 
         //Object Behavior 
-        vect position;
-        quat quaternion;
-        vect euler; 
+        vec position;
+        vec quaternion;
+        vec euler; 
 
-        vect velocity; 
-        vect angular_velocity; 
+        vec velocity; 
+        vec angular_velocity; 
 
-        vect acceleration;
-        vect angular_acceleration;
+        vec acceleration;
+        vec angular_acceleration;
 
         //Objects local Axis 
-        vect up;
-        vect right;
-        vect foward;
+        vec up;
+        vec right;
+        vec foward;
 
         //Updates the objects position and angle
-        void update(vect delta_angle, vect delta_position)
+        void update(vec delta_angle, vec delta_position)
         {      
             //Updating Position 
-            position.i += delta_position.i;
-            position.j += delta_position.j;
-            position.k += delta_position.k;
+            position.x += delta_position.x;
+            position.y += delta_position.y;
+            position.z += delta_position.z;
 
             //Updating Euler Angle 
-            euler.i += delta_angle.i;
-            euler.j += delta_angle.j;
-            euler.k += delta_angle.k;
+            euler.x += delta_angle.x;
+            euler.y += delta_angle.y;
+            euler.z += delta_angle.z;
             
             //Updating Quaternion Angle
-            quaternion = quater.setup(quaternion, delta_angle, right, up, foward);
+            quaternion = quat.setup(quaternion, delta_angle, right, up, foward);
 
             //Updating Objects Local Axis from rotation
-            foward = quater.rotation(quaternion, world_foward);
-            vector.normalize(foward);
+            foward = quat.rotation(quaternion, world_foward);
+            vect.normalize(foward);
 
-            up = quater.rotation(quaternion, world_up); 
-            vector.normalize(up);
+            up = quat.rotation(quaternion, world_up); 
+            vect.normalize(up);
 
-            right = vector.cross_product(foward, up);
-            vector.normalize(right);
-        };
-};
-
-class aircraft: public object 
-{      
-    private:
-        //
-        //Mass Properties (SI Units)
-        //
-        float weight; 
-        float mass = 2000; 
-        float Ixx = 21000;
-        float Iyy = 50000;
-        float Izz = 60000;
-        float Ixz = -1700;
-
-        //Inertia Constants
-        float c0 = Ixx*Izz - pow(Ixz, 2);
-        float c1 = Izz/c0; 
-        float c2 = Ixz/c0; 
-        float c3 = c2*(Ixx - Iyy + Izz);
-        float c4 = c1*(Iyy - Izz) - c2*Ixz;
-        float c5 = 1.0f/Iyy; 
-        float c6 = c5*Ixz;
-        float c7 = c5*(Izz - Ixx);
-        float c8 = Ixx/c0; 
-        float c9 = c8*(Ixx - Iyy) + c2*Ixz; 
-
-        //
-        //Geometery 
-        //
-        float wing_area = 20.0f;
-        float wing_span = 10.0f; 
-        float wing_sweep = 0.0f; 
-        float taper_ratio = 0.25f; 
-
-        //User Inputs
-        vect control_surface_angle;
-        vect trim_tab_angle; 
-
-        //Aerodynamics Properties
-        float lift_curve_infinite = 2.0f*3.1416f;
-        float zero_lift_drag = 0.02f; 
-        float zero_lift_alpha = 0.0f; //Needs to be calculated based on stuff
-        float zero_alpha_lift = 0.1f; 
-        float oswald_factor = 0.8f;
-        float induce_drag; 
-
-        float lift_coefficient;
-        float drag_coefficient; 
-        float pitching_moment_coefficient = -0.1; //Assumed constant across Alpha        
-
-        float lift_curve = (3.1416f*aspect_ratio)/(1.0f + pow(1 + (3.1416f*aspect_ratio)/(lift_curve_infinite*cos(wing_sweep)), 0.5)); 
-        float aspect_ratio = pow(wing_span, 2)/wing_area; 
-
-        //
-        //Atmoshperic Variables 
-        //
-        float density;
-        float pressure;
-        float dynamic_pressure; 
-        float temperature;
-        float speed_of_sound;
-
-        //
-        //Axes and Stuff F = Force, M = Moment, V = Velocity, A = Angle
-        //
-        //Assuming X is foward, Y is along right wing, Z is up though aircraft
-        //Not i = x axis, j = y_axis, k = z axis
-        //Earth position and angles are stored in object class
-        vect F_stab;
-        vect F_erth; 
-        
-        vect F_aero; 
-        vect F_prop;
-
-        vect M_body;
-        vect M_aero;
-        vect M_prop; 
-
-        //Used to convert to Earth Axis
-        vect L;
-        vect M; 
-        vect N; 
-
-        //Rotation Crap
-        quat quater;
-        quat temp_quaternion; 
-
-        float true_airspeed; 
-        vect body_speed; 
-        vect airspeed;
-        vect wind;
-
-        vect A_wind; //Stores Alpha and Beta
-
-        //Storing Time
-        float old_time;
-        float delta_time;
-
-    public: 
-        //Intial calculations 
-        void setup ()
-        {   
-            weight = mass*gravity; 
+            right = vect.cross_product(foward, up);
+            vect.normalize(right);
         };
 
-        //Atmoshperic changes with altitude 
-        //TODO Add Stratosphere calculations 
-        void atmosphere()
-        {       
-            if(position.k < troposhere_altitude)
-            {
-                temperature = sea_level_temperature - troposhere_temperature_constant*position.k;
-                pressure = sea_level_pressure*pow((temperature/sea_level_temperature), 5.256); 
-                density = sea_level_density*pow((temperature/sea_level_temperature), 4.256);
-                speed_of_sound = pow(ratio_specfic_heat*universal_gas_constant*temperature, 0.5); 
-                dynamic_pressure = 0.5f*density*pow(true_airspeed, 2);
-            }; 
-
-        };
-
-        //Calculating Aerodynamic Forces and Moments
-        void aerodynamics(vect delta_control_surfaces, vect delta_trim_tabs)
-        {   
-            //Updating Control Surface Positions
-            control_surface_angle.i += delta_control_surfaces.i;
-            control_surface_angle.j += delta_control_surfaces.j;
-            control_surface_angle.k += delta_control_surfaces.k;
-
-            //Updating Trim Tab Positions
-            trim_tab_angle.i += delta_trim_tabs.i;
-            trim_tab_angle.j += delta_trim_tabs.j;
-            trim_tab_angle.k += delta_trim_tabs.k;
-
-            //Coefficients
-            lift_coefficient = A_wind.j*lift_curve + zero_alpha_lift;
-            induce_drag = pow(lift_coefficient, 2)/(3.1416f*oswald_factor*aspect_ratio);
-            drag_coefficient = zero_lift_drag + induce_drag; 
-
-            //Forces (Might need to add negitives???)
-            F_aero.k = 0.5f * lift_coefficient * wing_area * dynamic_pressure; 
-            F_aero.i = 0.5f * drag_coefficient * wing_area * dynamic_pressure;
-
-            //Moments 
-        };
-
-        //Calculating Propulsive Forces and Moments
-        void propulsion()
+        //Converting quaternion to euler angles (To make sure euler and quaternion representations are equal)
+        void quaternion_to_euler()
         {
+            double test = quaternion.x*quaternion.y + quaternion.z*quaternion.w;
+            
+            if (test > 0.499) { // singularity at north pole
+                euler.x = 2 * atan2(quaternion.x,quaternion.w);
+                euler.y = 3.1412/2;
+                euler.z = 0;
+                return;
+            }
+            if (test < -0.499) { // singularity at south pole
+                euler.x = -2 * atan2(quaternion.x,quaternion.w);
+                euler.y = - 3.1412/2;
+                euler.z = 0;
+                return;
+            }
 
-        };
-        
-        //Resolving the Forces and Moments into Earth Axis 
-        void resolving_forces_and_moments(float current_time)
-        {   
-            //Change in time since last loop 
-            delta_time = old_time - current_time; 
-            old_time = current_time;
+            double sqx = quaternion.x*quaternion.x;
+            double sqy = quaternion.y*quaternion.y;
+            double sqz = quaternion.z*quaternion.z;
 
-            //Quaternion Components used for Transformations
-            L.i = 2*(pow(quaternion.x, 2) + pow(quaternion.y, 2)) - 1;
-            L.j = 2*(quaternion.y*quaternion.z + quaternion.x*quaternion.w);
-            L.k = 2*(quaternion.y*quaternion.w - quaternion.x*quaternion.z);
-
-            M.i = 2*(quaternion.y*quaternion.z - quaternion.x*quaternion.w);
-            M.j = 2*(pow(quaternion.x, 2) + pow(quaternion.z, 2)) - 1;
-            M.k = 2*(quaternion.z*quaternion.w + quaternion.x*quaternion.y);
-
-            N.i = 2*(quaternion.y*quaternion.w + quaternion.x*quaternion.z);
-            N.j = 2*(quaternion.z*quaternion.w - quaternion.x*quaternion.y);
-            N.k = 2*(pow(quaternion.x, 2) + pow(quaternion.w, 2)) - 1;
-
-            //Forces from Propulsion and Aerodynamic in Stability axis
-            F_stab.i = F_prop.i*cos(A_wind.j) + F_prop.k*sin(A_wind.j) + F_aero.i;  
-            F_stab.j = F_prop.j + F_aero.j;
-            F_stab.k = F_prop.k*cos(A_wind.j) - F_prop.i*sin(A_wind.j) + F_aero.k;  
-
-            //Forces Transformed into Earth Axis
-            F_erth.i = (L.i*cos(A_wind.j) + N.i*sin(A_wind.j))*F_stab.i + M.i*F_stab.j + (N.i*cos(A_wind.j) - L.i*sin(A_wind.j))*F_stab.k;
-            F_erth.j = (L.j*cos(A_wind.j) + N.j*sin(A_wind.j))*F_stab.i + M.j*F_stab.j + (N.j*cos(A_wind.j) - L.j*sin(A_wind.j))*F_stab.k;
-            F_erth.k = (L.k*cos(A_wind.j) + N.k*sin(A_wind.j))*F_stab.i + M.k*F_stab.j + (N.k*cos(A_wind.j) - L.k*sin(A_wind.j))*F_stab.k + weight;
-
-            //Moments around Body Axis
-            M_body.i = M_aero.i*cos(A_wind.j) - M_aero.j*sin(A_wind.j) + M_prop.i; 
-            M_body.j = M_aero.j + M_prop.j; 
-            M_body.k = M_aero.i*cos(A_wind.j) + M_aero.j*sin(A_wind.j) + M_prop.j; 
-
-            //Angular Accelerations
-            angular_acceleration.i = M_body.i*c1 + M_body.k*c2 + (angular_velocity.i*c3 + angular_velocity.k*c4)*angular_velocity.j;
-            angular_acceleration.j = M_body.j*c5 + (pow(angular_velocity.k, 2) - pow(angular_velocity.i, 2))*c6 + angular_velocity.i*angular_velocity.k*c7;
-            angular_acceleration.k = M_body.k*c8 + M_body.i*c2 + (angular_velocity.i*c9 - angular_velocity.k*c3)*angular_velocity.j;
-
-            //Earth Accelerations 
-            acceleration.i = F_erth.i/mass;
-            acceleration.j = F_erth.j/mass;
-            acceleration.k = F_erth.k/mass;
-
-            //Earth Velocities 
-            velocity.i += acceleration.i*delta_time;
-            velocity.j += acceleration.j*delta_time;
-            velocity.k += acceleration.k*delta_time;
-
-            //Angular Velocities 
-            angular_velocity.i += angular_acceleration.i*delta_time;
-            angular_velocity.j += angular_acceleration.j*delta_time;
-            angular_velocity.k += angular_acceleration.k*delta_time;
-
-            //Angular Velocity back into Quaternion and Normalize
-            temp_quaternion.x = -0.5f * (angular_velocity.i*quaternion.y + angular_velocity.j*quaternion.z + angular_velocity.k*quaternion.w); 
-            temp_quaternion.y =  0.5f * (angular_velocity.i*quaternion.x - angular_velocity.j*quaternion.w + angular_velocity.k*quaternion.z);
-            temp_quaternion.z =  0.5f * (angular_velocity.i*quaternion.w + angular_velocity.j*quaternion.x - angular_velocity.k*quaternion.y);
-            temp_quaternion.w = -0.5f * (angular_velocity.i*quaternion.z - angular_velocity.j*quaternion.y - angular_velocity.k*quaternion.x);
-
-            quater.normalize(temp_quaternion);
-
-            //Update Global Quaternion
-            quaternion = quater.multiply(temp_quaternion, quaternion);
-
-            //Earth Positions
-            position.i += velocity.i*delta_time;
-            position.j += velocity.j*delta_time;
-            position.k += velocity.k*delta_time;            
-
-            //Airspeed
-            airspeed.i = velocity.i - wind.i; 
-            airspeed.j = velocity.j - wind.j;
-            airspeed.k = velocity.k - wind.k;
-
-            //Aircraft speed
-            body_speed.i = L.i*airspeed.i + L.j*airspeed.j + L.k*airspeed.k;
-            body_speed.j = M.i*airspeed.i + M.j*airspeed.j + M.k*airspeed.k;
-            body_speed.k = N.i*airspeed.i + N.j*airspeed.j + N.k*airspeed.k;
-
-            //Angles 
-            true_airspeed = pow(pow(body_speed.i, 2) + pow(body_speed.j, 2) + pow(body_speed.k, 2), 0.5);
-            A_wind.j = atan(body_speed.i / body_speed.k); //Alpha
-            A_wind.k = atan(body_speed.j / true_airspeed); //Beta
+            euler.x = atan2(2*quaternion.y*quaternion.w-2*quaternion.x*quaternion.z , 1 - 2*sqy - 2*sqz);
+            euler.y = asin(2*test);
+            euler.z = atan2(2*quaternion.x*quaternion.w-2*quaternion.y*quaternion.z , 1 - 2*sqx - 2*sqz);
         };
 };
 
@@ -682,18 +434,18 @@ class aircraft: public object
         // 
         //Axes 
         //
-        vect wind; //?
+        vec wind; //?
 
-        vect body_axis; 
-        vect wind_axis;
-        vect earth_axis;  
+        vec body_axis; 
+        vec wind_axis;
+        vec earth_axis;  
 
-        vect aircraft_velocity;
-        vect aircraft_forces; 
-        vect aircraft_moments; 
+        vec aircraft_velocity;
+        vec aircraft_forces; 
+        vec aircraft_moments; 
 
         //Angle between body and wind
-        vect stability_angles; 
+        vec stability_angles; 
 
         //
         //Geometery
@@ -720,8 +472,8 @@ class aircraft: public object
         //
         //Control Surfaces 
         //
-        vect control_surface_angle;
-        vect trim_tap_angle; 
+        vec control_surface_angle;
+        vec trim_tap_angle; 
         
         //
         //Atmoshere (can add extension into troposhere)
@@ -736,12 +488,12 @@ class aircraft: public object
         ///Forces and Moments 
         ///
 
-        vect propulsive_forces_body;
-        vect forces_stability;
-        vect aerodynamic_forces; 
-        vect aerodynamic_moments;
+        vec propulsive_forces_body;
+        vec forces_stability;
+        vec aerodynamic_forces; 
+        vec aerodynamic_moments;
 
-        vect angular_acceleration_body;
+        vec angular_acceleration_body;
 
         //Atmoshperic changes with altitude 
         void atmosphere(float altitude)
@@ -805,6 +557,144 @@ class aircraft: public object
 };
 */
 
+class aircraft: public object 
+{      
+    private:
+        float mass = 2000; 
+
+        float Ixx = 21000;
+        float Iyy = 50000;
+        float Izz = 60000;
+        float Ixz = -1700;
+
+        //Inertia Constants for Ron
+        float c0 = Ixx*Izz - pow(Ixz, 2);
+        float c1 = Izz/c0; 
+        float c2 = Ixz/c0; 
+        float c3 = c2*(Ixx - Iyy + Izz);
+        float c4 = c1*(Iyy - Izz) - c2*Ixz;
+        float c5 = 1/Iyy; 
+        float c6 = c5*Ixz;
+        float c7 = c5*(Izz - Ixx);
+        float c8 = Ixx/c0; 
+        float c9 = c8*(Ixx - Iyy) + c2*Ixz; 
+
+    public: 
+        //Axes and Stuff F = Force, M = Moment, V = Velocity, A = Angle
+        //Assuming X is foward, Y is along right wing, Z is up though aircraft
+        //Earth position and angles are stored in object class
+        vec F_stab;
+        vec F_erth; 
+        
+        vec F_aero; 
+        vec F_prop;
+
+        vec M_body;
+        vec M_aero;
+        vec M_prop; 
+
+        float true_airspeed; 
+        vec body_speed; 
+        vec airspeed;
+        vec wind;
+
+        vec A_wind; //Stores Alpha and Beta
+
+        //Used to convert to Earth Axis
+        vec L;
+        vec M; 
+        vec N; 
+
+        //Storing Time
+        float old_time;
+        float delta_time;
+        
+        void forces_and_moments(float current_time)
+        {   
+            //Change in time since last loop 
+            delta_time = old_time - current_time; 
+            old_time = current_time;
+
+            //Quaternion Components used for Transformations
+            L.x = 2*(pow(quaternion.x, 2) + pow(quaternion.y, 2)) - 1;
+            L.y = 2*(quaternion.y*quaternion.z + quaternion.x*quaternion.w);
+            L.z = 2*(quaternion.y*quaternion.w - quaternion.x*quaternion.z);
+
+            M.x = 2*(quaternion.y*quaternion.z - quaternion.x*quaternion.w);
+            M.y = 2*(pow(quaternion.x, 2) + pow(quaternion.z, 2)) - 1;
+            M.z = 2*(quaternion.z*quaternion.w + quaternion.x*quaternion.y);
+
+            N.x = 2*(quaternion.y*quaternion.w + quaternion.x*quaternion.z);
+            N.y = 2*(quaternion.z*quaternion.w - quaternion.x*quaternion.y);
+            N.z = 2*(pow(quaternion.x, 2) + pow(quaternion.w, 2)) - 1;
+
+            //Forces from Propulsion and Aerodynamic in Stability axis
+            F_stab.x = F_prop.x*cos(A_wind.y) + F_prop.z*sin(A_wind.y) + F_aero.x;  
+            F_stab.y = F_prop.y + F_aero.y;
+            F_stab.z = F_prop.z*cos(A_wind.y) - F_prop.x*sin(A_wind.y) + F_aero.z;  
+
+            //Forces Transformed into Earth Axis
+            F_erth.x = (L.x*cos(A_wind.y) + N.x*sin(A_wind.x))*F_stab.x + M.x*F_stab.y + (N.x*cos(A_wind.y) - L.x*sin(A_wind.y))*F_stab.z;
+            F_erth.y = (L.y*cos(A_wind.y) + N.y*sin(A_wind.x))*F_stab.x + M.y*F_stab.y + (N.y*cos(A_wind.y) - L.y*sin(A_wind.y))*F_stab.z;
+            F_erth.z = (L.z*cos(A_wind.y) + N.z*sin(A_wind.x))*F_stab.x + M.z*F_stab.y + (N.z*cos(A_wind.y) - L.z*sin(A_wind.y))*F_stab.z;
+
+            //Moments around Body Axis
+            M_body.x = M_aero.x*cos(A_wind.y) - M_aero.y*sin(A_wind.y) + M_prop.x; 
+            M_body.y = M_aero.y + M_prop.y; 
+            M_body.z = M_aero.x*cos(A_wind.y) + M_aero.y*sin(A_wind.y) + M_prop.y; 
+
+            //Angular Accelerations
+            angular_acceleration.x = M_body.x*c1 + M_body.z*c2 + (angular_velocity.x*c3 + angular_velocity.z*c4)*angular_velocity.y;
+            angular_acceleration.y = M_body.y*c5 + (pow(angular_velocity.z, 2) - pow(angular_velocity.x, 2))*c6 + angular_velocity.x*angular_velocity.z*c7;
+            angular_acceleration.z = M_body.z*c8 + M_body.x*c2 + (angular_velocity.x*c9 - angular_velocity.z*c3)*angular_velocity.y;
+
+            //Earth Accelerations 
+            acceleration.x = F_erth.x/mass;
+            acceleration.y = F_erth.y/mass;
+            acceleration.z = F_erth.z/mass;
+
+            //Earth Velocities 
+            velocity.x += acceleration.x*delta_time;
+            velocity.y += acceleration.y*delta_time;
+            velocity.z += acceleration.z*delta_time;
+
+            //Angular Velocities 
+            angular_velocity.x = angular_acceleration.x*delta_time;
+            angular_velocity.y = angular_acceleration.y*delta_time;
+            angular_velocity.z = angular_acceleration.z*delta_time;
+
+            //Earth Positions
+            position.x += velocity.x*delta_time;
+            position.y += velocity.y*delta_time;
+            position.z += velocity.z*delta_time;            
+
+            //Airspeed
+            airspeed.x = velocity.x - wind.x; 
+            airspeed.y = velocity.y - wind.y;
+            airspeed.z = velocity.z - wind.z;
+
+            //Aircraft speed
+            body_speed.x = L.x*airspeed.x + L.y*airspeed.y + L.z*airspeed.z;
+            body_speed.y = M.x*airspeed.x + M.y*airspeed.y + M.z*airspeed.z;
+            body_speed.z = N.x*airspeed.x + N.y*airspeed.y + N.z*airspeed.z;
+
+            //Angles 
+            true_airspeed = pow(pow(body_speed.x, 2) + pow(body_speed.y, 2) + pow(body_speed.z, 2), 0.5);
+            A_wind.y = atan(body_speed.x / body_speed.z); //Alpha
+            A_wind.z = atan(body_speed.y / true_airspeed); //Beta
+        };
+};
+
+//Global Variables 
+const int screen_width = 1000;
+const int screen_height = 1000;
+const float camera_view_angle = 90; 
+const float z_max_distance = 1000;
+const float z_min_distance = 0.1;
+
+//Game Run Condition
+int run = 1; 
+
 //Point Definition
 float points[8][4] = 
 {
@@ -825,12 +715,13 @@ float projection[4][4];
 //
 //Main Function
 //
+
 int main(int argc, char *argv[]) 
 {  
     //Starting Setup
     printf("Starting Setup\n");
 
-    //Setting up SDL (Credit to Jack)
+    //Setting up SDL
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window*window  = SDL_CreateWindow("Testing", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     SDL_Renderer*renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -838,27 +729,26 @@ int main(int argc, char *argv[])
     SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
     SDL_Event window_event;
 
-    //Declaring Objects (Used for there functions)
+    //Declaring Objects 
     object camera; 
-    vect vector;
-    mat  matrix; 
-    quat quater;
+    vector vect;
+    matrix matx; 
+    quaternion quat;
     
     //Defining the contenet of the matrix as 0
-    matrix.clear(look_at);
-    matrix.clear(projection);
+    matx.clear(look_at);
+    matx.clear(projection);
 
     //Creating Projection Matrix 
-    matrix.projection(projection, camera_view_angle,  screen_height,  screen_width,  z_max_distance,  z_min_distance);
+    matx.projection(projection, camera_view_angle,  screen_height,  screen_width,  z_max_distance,  z_min_distance);
 
     //Velocities for the Camera
-    vect point;
-    vect result;
-    vect camera_view;
-    vect delta_position;
-    vect delta_angle;
+    vec point;
+    vec result;
+    vec camera_view;
+    vec delta_position;
+    vec delta_angle;
 
-    //Initializing Speeds 
     float left_speed = 0;     float yaw_left_speed = 0;
     float right_speed = 0;    float yaw_right_speed = 0;
     float down_speed = 0;     float pitch_down_speed = 0;
@@ -866,10 +756,8 @@ int main(int argc, char *argv[])
     float foward_speed = 0;   float roll_right_speed = 0;
     float backward_speed = 0; float roll_left_speed = 0;
 
-    //Setting Angular and Translational Velocities
     float velocity = 8;       float angular_velocity = 2;
 
-    //Initializing Game Time 
     float game_time = SDL_GetTicks(); 
     float time_elapsed = 0; 
 
@@ -987,19 +875,19 @@ int main(int argc, char *argv[])
         game_time = SDL_GetTicks();
 
         //Updating Positions and Angles
-        delta_angle.i = (yaw_right_speed - yaw_left_speed)*time_elapsed;
-        delta_angle.j = (roll_right_speed - roll_left_speed)*time_elapsed;
-        delta_angle.k = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
+        delta_angle.x = (yaw_right_speed - yaw_left_speed)*time_elapsed;
+        delta_angle.y = (roll_right_speed - roll_left_speed)*time_elapsed;
+        delta_angle.z = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
 
-        delta_position.i = (left_speed - right_speed)*time_elapsed;
-        delta_position.j = (up_speed - down_speed)*time_elapsed; 
-        delta_position.k = (foward_speed - backward_speed)*time_elapsed;
+        delta_position.x = (left_speed - right_speed)*time_elapsed;
+        delta_position.y = (up_speed - down_speed)*time_elapsed; 
+        delta_position.z = (foward_speed - backward_speed)*time_elapsed;
 
         //Updating the Camera Oobject 
         camera.update(delta_angle, delta_position);
 
         //Generating the LookAt matrix
-        matrix.lookat(look_at, camera.position, camera.foward, camera.up, camera.right);
+        matx.lookat(look_at, camera.position, camera.foward, camera.up, camera.right);
 
         //Loop for each point
         for(int l = 0; l < 50; l++)
@@ -1009,20 +897,20 @@ int main(int argc, char *argv[])
                 for (int i = 0; i < 8; i++)
                 {   
                     //Moving data
-                    point.i = points[i][0] + l;
-                    point.j = points[i][1];    
-                    point.k = points[i][2] + k; 
+                    point.x = points[i][0] + l;
+                    point.y = points[i][1];
+                    point.z = points[i][2] + k; 
 
                     //Camera Manipulation
-                    camera_view = matrix.vector_multiplication(point, look_at);
+                    camera_view = matx.vector_multiplication(point, look_at);
 
                     //Projectring from 3d into 2d then normalizing  
-                    result = matrix.vector_multiplication(camera_view, projection);
-                    result = vector.divide(result, result.w);
+                    result = matx.vector_multiplication(camera_view, projection);
+                    result = vect.divide(result, result.w);
 
                     //Scaling into screen (because Projection space is from -1 to 1)
-                    updated[i][0] = (result.i + 1.0)*screen_width/2;
-                    updated[i][1] = (result.j + 1.0)*screen_width/2; 
+                    updated[i][0] = (result.x + 1.0)*screen_width/2;
+                    updated[i][1] = (result.y + 1.0)*screen_width/2; 
                 };
 
                 //Drawing the Sides of the Cubes 
@@ -1051,6 +939,7 @@ int main(int argc, char *argv[])
                 SDL_RenderDrawLine(renderer, updated[3][0], updated[3][1], updated[7][0], updated[7][1]);
                 SDL_RenderDrawLine(renderer, updated[7][0], updated[7][1], updated[4][0], updated[4][1]);
                 SDL_RenderDrawLine(renderer, updated[4][0], updated[4][1], updated[0][0], updated[0][1]);
+
             };
         };
 
