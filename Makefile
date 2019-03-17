@@ -12,8 +12,8 @@ endif
 $(info Compiling on $(detected_OS))
 
 # Set flags depending on OS
-ifeq ($(detected_OS),Cygwin)
-	$(info hi richard)
+ifeq ($(detected_OS),MSYS)
+	#$(info hi richard)
 	#COMPILER_FLAGS specifies the additional compilation options we're using
 	# -w suppresses all warnings
 	# -Wl,-subsystem,windows gets rid of the console window
