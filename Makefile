@@ -35,7 +35,7 @@ OBJS = 3D_Engine.cpp
 #CC specifies which compiler we're using
 CC = g++
 # Because of richards shitty code
-COMPILER_FLAGS += -fpermissive
+#COMPILER_FLAGS += -fpermissive
 #OBJ_NAME specifies the name of our exectuable
 OBJ_NAME = Engine
 
