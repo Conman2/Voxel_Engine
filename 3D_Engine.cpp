@@ -195,21 +195,24 @@ class Jet_Engine {
         // The ratio of exhuast speed/rotational speed for the "propeller"
         float prop_pitch = 0.05;
         // Resistance from bearings, etc. in torque
-        float mechanical_friction = 100;
+        float mechanical_friction_max = 100;
         // The engines mass or whatever, resistance to acceleration
         float rotational_inertia = 1000;
         
         // Core speed, changes constantly
         float rotational_speed = 0;
         // Run once per frame
-        void update(float timedelta, float throttle_percentage, float inlet_speed) {
+        void update(float throttle_percentage, float inlet_speed) {
             // Calculates generated power for this update, assume linear increase from zero
             float generated_torque = 0.1*this->rotational_speed*throttle_percentage;
 
             // The torque on the core caused by the acceleration of air from inlet to outlet
             float air_torque = pow(inlet_speed / this->prop_pitch - this->rotational_speed, 2);
             
-            float core_rev_change = (generated_torque - air_torque) * timedelta / rotational_inertia;
+            // Mechanical friction acts to bring the rpm to zero, with a maximum effect
+            float mechanical_friction = min(mechanical_friction_max, rotational_speed*rotational_inertia)
+            
+            float core_rev_change = (generated_torque - air_torque - mechanical_friction) / rotational_inertia;
 
             this->rotational_speed=this->rotational_speed+core_rev_change;
         }
