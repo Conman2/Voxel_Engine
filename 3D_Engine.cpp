@@ -189,6 +189,8 @@ class quat
         }; 
 };
 
+#include <algorithm>
+
 class Jet_Engine {
     // Effectively a sideways helicopter
     public:
@@ -202,19 +204,24 @@ class Jet_Engine {
         // Core speed, changes constantly
         float rotational_speed = 0;
         // Run once per frame
-        void update(float throttle_percentage, float inlet_speed) {
+        vect update(float throttle_percentage, float inlet_speed) {
             // Calculates generated power for this update, assume linear increase from zero
             float generated_torque = 0.1*this->rotational_speed*throttle_percentage;
 
+            // Force on the engine, from the air
+            float air_force = pow(inlet_speed - this->rotational_speed * this->prop_pitch,2);
+
             // The torque on the core caused by the acceleration of air from inlet to outlet
-            float air_torque = pow(inlet_speed / this->prop_pitch - this->rotational_speed, 2);
+            float air_torque = air_force * this->prop_pitch;
             
             // Mechanical friction acts to bring the rpm to zero, with a maximum effect
-            float mechanical_friction = min(mechanical_friction_max, rotational_speed*rotational_inertia)
+            float mechanical_friction = std::min(mechanical_friction_max, rotational_speed*rotational_inertia);
             
             float core_rev_change = (generated_torque - air_torque - mechanical_friction) / rotational_inertia;
 
             this->rotational_speed=this->rotational_speed+core_rev_change;
+
+            return(vect {air_force,0,0});
         }
 };
 
