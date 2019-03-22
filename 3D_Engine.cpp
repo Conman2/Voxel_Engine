@@ -189,37 +189,34 @@ class quat
         }; 
 };
 
+// So i can use min()
 #include <algorithm>
 
 class Jet_Engine {
     // Effectively a sideways helicopter
     public:
         // The ratio of exhuast speed/rotational speed for the "propeller"
-        float prop_pitch = 0.05;
+        float prop_pitch = 0.06;
         // Resistance from bearings, etc. in torque
-        float mechanical_friction_max = 100;
+        float friction_torque_max = 19000; 
         // The engines mass or whatever, resistance to acceleration
-        float rotational_inertia = 1000;
+        float rotational_inertia = 10;
         
         // Core speed, changes constantly
         float rotational_speed = 0;
         // Run once per frame
-        vect update(float throttle_percentage, float inlet_speed) {
+        vect update(float throttle_percentage, float inlet_speed, float timestep) {
             // Calculates generated power for this update, assume linear increase from zero
-            float generated_torque = 0.1*this->rotational_speed*throttle_percentage;
-
+            float generated_torque = 7*this->rotational_speed*throttle_percentage;
             // Force on the engine, from the air
-            float air_force = pow(inlet_speed - this->rotational_speed * this->prop_pitch,2);
-
+            float air_force = pow(inlet_speed - this->rotational_speed * this->prop_pitch, 2);
             // The torque on the core caused by the acceleration of air from inlet to outlet
             float air_torque = air_force * this->prop_pitch;
-            
             // Mechanical friction acts to bring the rpm to zero, with a maximum effect
-            float mechanical_friction = std::min(mechanical_friction_max, rotational_speed*rotational_inertia);
+            float mechanical_friction = std::min(friction_torque_max, rotational_speed * rotational_inertia / timestep);
             
-            float core_rev_change = (generated_torque - air_torque - mechanical_friction) / rotational_inertia;
-
-            this->rotational_speed=this->rotational_speed+core_rev_change;
+            float rotational_change = ((generated_torque - air_torque - mechanical_friction) * timestep) / rotational_inertia;
+            this->rotational_speed = this->rotational_speed + rotational_change;
 
             return(vect {air_force,0,0});
         }
@@ -879,6 +876,7 @@ int main(int argc, char *argv[])
     vect vector;
     mat  matrix; 
     quat quater;
+    Jet_Engine big_engine;
     
     //Defining the contenet of the matrix as 0
     matrix.clear(look_at);
@@ -1019,7 +1017,7 @@ int main(int argc, char *argv[])
         }
 
         //Updating Time (in seconds)
-        time_elapsed = (game_time - SDL_GetTicks())/1000;
+        time_elapsed = (SDL_GetTicks() - game_time)/1000;
         game_time = SDL_GetTicks();
 
         //Updating Positions and Angles
@@ -1037,10 +1035,14 @@ int main(int argc, char *argv[])
         //Generating the LookAt matrix
         matrix.lookat(look_at, camera.position, camera.foward, camera.up, camera.right);
 
+        vect engine_force = big_engine.update(1.0,0.0,time_elapsed);
+
+        printf("Engine Speed: %f\n",big_engine.rotational_speed);
+
         //Loop for each point
-        for(int l = 0; l < 50; l++)
+        for(int l = 0; l < 1; l++)
         {
-            for(int k = 0; k < 50; k++)
+            for(int k = 0; k < 1; k++)
             {
                 for (int i = 0; i < 8; i++)
                 {   
