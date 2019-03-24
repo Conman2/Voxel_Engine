@@ -1,6 +1,11 @@
+//TODO 
+//Remove Data outside Camera Volume 
+
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
+#include <math.h> 
+#include <algorithm>
+#include <vector>
 #include <SDL2/SDL.h>
 
 //Global Constants (SI Units)
@@ -25,6 +30,9 @@ const float z_min_distance = 0.1;
 
 //Game Run Condition
 int run = 1; 
+
+//Acessing Map Generation
+int generate_terrain(int , double , double , double , double, float **);
 
 //These Classes are used to store Data Structures and Functions 
 //The Vector Class
@@ -374,9 +382,9 @@ class object
         void update(vect delta_angle, vect delta_position)
         {      
             //Updating Position 
-            position.i += delta_position.i;
-            position.j += delta_position.j;
-            position.k += delta_position.k;
+            position.i += delta_position.i*right.i + delta_position.j*up.i + delta_position.k*foward.i;
+            position.j += delta_position.i*right.j + delta_position.j*up.j + delta_position.k*foward.j;
+            position.k += delta_position.i*right.k + delta_position.j*up.k + delta_position.k*foward.k;
 
             //Updating Euler Angle 
             euler.i += delta_angle.i;
@@ -428,8 +436,21 @@ class aircraft: public object
         //
         float wing_area = 20.0f;
         float wing_span = 10.0f; 
+        float wing_mean_cord = 5.0f; 
         float wing_sweep = 0.0f; 
+        float aspect_ratio; 
         float taper_ratio = 0.25f; 
+
+        float dist_cg_ac = 1.0f;
+
+        float tail_area = 5.0f; 
+        float tail_dist_ac = 15.0f;  
+        float tail_volume; 
+        float tail_efficieny; 
+
+        float fuselage_volume = 50.0f;
+        float fuselage_moment_curve; 
+        float fuselage_moment; 
 
         //User Inputs
         vect control_surface_angle;
@@ -440,15 +461,20 @@ class aircraft: public object
         float zero_lift_drag = 0.02f; 
         float zero_lift_alpha = 0.0f; //Needs to be calculated based on stuff
         float zero_alpha_lift = 0.1f; 
+        float zero_alpha_moment = 0.1f; 
         float oswald_factor = 0.8f;
         float induce_drag; 
 
         float lift_coefficient;
         float drag_coefficient; 
+        float lift_coefficient_wing;
+        float drag_coefficient_wing; 
+        float lift_coefficient_tail;
+        float drag_coefficient_tail; 
         float pitching_moment_coefficient = -0.1; //Assumed constant across Alpha        
 
-        float lift_curve = (3.1416f*aspect_ratio)/(1.0f + pow(1 + (3.1416f*aspect_ratio)/(lift_curve_infinite*cos(wing_sweep)), 0.5)); 
-        float aspect_ratio = pow(wing_span, 2)/wing_area; 
+        float lift_curve; 
+        float pitching_moment_cofficient; 
 
         //
         //Atmoshperic Variables 
@@ -500,6 +526,10 @@ class aircraft: public object
         void setup ()
         {   
             weight = mass*gravity; 
+            lift_curve = (3.1416f*aspect_ratio)/(1.0f + pow(1 + (3.1416f*aspect_ratio)/(lift_curve_infinite*cos(wing_sweep)), 0.5)); 
+            aspect_ratio = pow(wing_span, 2)/wing_area; 
+            tail_volume = (tail_area*tail_dist_ac)/(wing_area*wing_mean_cord);
+            fuselage_moment_curve = (2*fuselage_volume)/(wing_area*wing_mean_cord);
         };
 
         //Atmoshperic changes with altitude 
@@ -514,7 +544,6 @@ class aircraft: public object
                 speed_of_sound = pow(ratio_specfic_heat*universal_gas_constant*temperature, 0.5); 
                 dynamic_pressure = 0.5f*density*pow(true_airspeed, 2);
             }; 
-
         };
 
         //Calculating Aerodynamic Forces and Moments
@@ -531,15 +560,20 @@ class aircraft: public object
             trim_tab_angle.k += delta_trim_tabs.k;
 
             //Coefficients
-            lift_coefficient = A_wind.j*lift_curve + zero_alpha_lift;
+            lift_coefficient_wing = A_wind.j*lift_curve + zero_alpha_lift;
             induce_drag = pow(lift_coefficient, 2)/(3.1416f*oswald_factor*aspect_ratio);
-            drag_coefficient = zero_lift_drag + induce_drag; 
+            drag_coefficient_wing = zero_lift_drag + induce_drag; 
 
             //Forces (Might need to add negitives???)
             F_aero.k = 0.5f * lift_coefficient * wing_area * dynamic_pressure; 
             F_aero.i = 0.5f * drag_coefficient * wing_area * dynamic_pressure;
 
             //Moments 
+            fuselage_moment = fuselage_moment_curve*A_wind.j; 
+
+            //Total Moments
+            pitching_moment_cofficient = zero_alpha_moment + (dist_cg_ac/wing_mean_cord)*(lift_coefficient_wing + tail_efficieny*(tail_area/wing_area)*lift_coefficient_tail) - tail_efficieny*tail_volume*lift_coefficient_tail + fuselage_moment_curve;
+            M_aero.j = pitching_moment_coefficient * wing_area * wing_mean_cord * dynamic_pressure;
         };
 
         //Calculating Propulsive Forces and Moments
@@ -552,6 +586,7 @@ class aircraft: public object
         void resolving_forces_and_moments(float current_time)
         {   
             //Change in time since last loop 
+            //This might be in ticks so need to convert to Seconds
             delta_time = old_time - current_time; 
             old_time = current_time;
 
@@ -635,6 +670,338 @@ class aircraft: public object
             A_wind.k = atan(body_speed.j / true_airspeed); //Beta
         };
 };
+
+//Colour Struct
+struct colour
+{   
+    //Colour Struct (Default is Solid White)
+    int r = 0; 
+    int g = 0;
+    int b = 0; 
+    int a = 255; 
+};
+
+//Voxel Struct 
+struct voxel
+{
+    vect position; 
+    float size; 
+    colour colour;
+};
+
+//Making some colours for ron
+colour none = {0, 0, 0, 0};
+colour red = {255, 0, 0};
+colour blue = {0, 0, 255};
+colour green = {0, 255, 0};
+
+colour vox[3][5][5] = 
+{
+    {
+        {red, red, red, red, red},
+        {red, red, red, red, red},
+        {red, red, red, red, red},
+        {red, red, red, red, red},  
+        {red, red, red, red, red},     
+    },
+
+    {
+        {none, none, none, none, none},
+        {none, green, green, green, none},
+        {none, green, green, green, none},
+        {none, green, green, green, none}, 
+        {none, none, none, none, none},
+    },
+
+    {
+        {none, none, none, none, none},
+        {none, none, none, none, none},
+        {none, none, blue, none, none},
+        {none, none, none, none, none}, 
+        {none, none, none, none, none},       
+    }
+};
+
+float look_at[4][4];
+float projection[4][4];
+
+//
+//Main Function
+//
+int main(int argc, char *argv[]) 
+{  
+    //Starting Setup
+    printf("Starting Setup\n");
+
+    //Setting up SDL (Credit to Jack)
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window*window  = SDL_CreateWindow("Testing", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+    SDL_Renderer*renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+    SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
+    SDL_Event window_event;
+
+    //Generating Terrain 
+    //generate_terrain(terrain_size, terrain_size, terrain_size, 3.0, 1, height);
+
+    //Declaring Objects (Used for there functions)
+    object camera; 
+    vect vectr;
+    mat  matrix; 
+    quat quater;
+    
+    //Defining the contenet of the matrix as 0
+    matrix.clear(look_at);
+    matrix.clear(projection);
+
+    //Creating Projection Matrix 
+    matrix.projection(projection, camera_view_angle,  screen_height,  screen_width,  z_max_distance,  z_min_distance);
+
+    //Velocities for the Camera
+    vect point2; 
+    vect point;
+    vect test2;
+    vect result;
+    vect camera_view;
+    vect delta_position;
+    vect delta_angle;
+    voxel temp; 
+
+    //Initializing Speeds 
+    float left_speed = 0;     float yaw_left_speed = 0;
+    float right_speed = 0;    float yaw_right_speed = 0;
+    float down_speed = 0;     float pitch_down_speed = 0;
+    float up_speed = 0;       float pitch_up_speed = 0;
+    float foward_speed = 0;   float roll_right_speed = 0;
+    float backward_speed = 0; float roll_left_speed = 0;
+
+    //Setting Angular and Translational Velocities
+    float velocity = 8;       float angular_velocity = 2;
+
+    //Initializing Game Time 
+    float game_time = SDL_GetTicks(); 
+    float time_elapsed = 0; 
+
+    //Defining an SDL Rectangle 
+    SDL_Rect rect; 
+
+    //Main Loop 
+    while (run == 1)
+    {
+        while (SDL_PollEvent(&window_event)){
+            switch( window_event.type ){
+                case SDL_QUIT:
+                    run = 0;
+                    break;
+                    // Look for a keypress
+                case SDL_KEYDOWN:
+                    // Check the SDLKey values and move change the coords
+                    switch( window_event.key.keysym.sym ){
+                        //Translation Keys 
+                        case SDLK_LEFT:
+                            left_speed = velocity;
+                            break; 
+                        case SDLK_RIGHT:
+                            right_speed = velocity;                      
+                            break; 
+                        case SDLK_UP:
+                            up_speed = velocity;
+                            break; 
+                        case SDLK_DOWN:
+                            down_speed = velocity;
+                            break;
+                        case SDLK_r:
+                            foward_speed = velocity;
+                            break; 
+                        case SDLK_f:
+                            backward_speed = velocity;
+                            break;                            break; 
+
+                        //Rotation Keys  
+                        case SDLK_w:
+                            yaw_left_speed = angular_velocity;
+                            break; 
+                        case SDLK_s:
+                            yaw_right_speed = angular_velocity;                      
+                            break; 
+                        case SDLK_a:
+                            pitch_up_speed = angular_velocity;
+                            break; 
+                        case SDLK_d:
+                            pitch_down_speed = angular_velocity;
+                            break;  
+                        case SDLK_e:
+                            roll_right_speed = angular_velocity;
+                            break; 
+                        case SDLK_q:
+                            roll_left_speed = angular_velocity;
+                            break;                              
+
+                        //Defualt      
+                        default:    
+                            break;
+                    }
+                    break;
+
+                case SDL_KEYUP:
+                    // Check the SDLKey values and move change the coords
+                    switch( window_event.key.keysym.sym ){
+                        //Translation Keys 
+                        case SDLK_LEFT:
+                            left_speed = 0;
+                            break; 
+                        case SDLK_RIGHT:
+                            right_speed = 0;                      
+                            break; 
+                        case SDLK_UP:
+                            up_speed = 0;
+                            break; 
+                        case SDLK_DOWN:
+                            down_speed = 0;
+                            break; 
+                        case SDLK_r:
+                            foward_speed = 0;
+                            break; 
+                        case SDLK_f:
+                            backward_speed = 0;
+                            break;   
+
+                        //Rotation Keys  
+                        case SDLK_w:
+                            yaw_left_speed = 0;
+                            break; 
+                        case SDLK_s:
+                            yaw_right_speed = 0;                      
+                            break; 
+                        case SDLK_a:
+                            pitch_up_speed = 0;
+                            break; 
+                        case SDLK_d:
+                            pitch_down_speed = 0;
+                            break;  
+                        case SDLK_e:
+                            roll_right_speed = 0;
+                            break; 
+                        case SDLK_q:
+                            roll_left_speed = 0;
+                            break;                                 
+
+                        //Defualt      
+                        default:    
+                            break;
+                    }
+                    break;
+            }
+        }
+
+        //Updating Time (in seconds)
+        time_elapsed = (game_time - SDL_GetTicks())/1000;
+        game_time = SDL_GetTicks();
+
+        //Updating Positions and Angles
+        delta_angle.i = (yaw_right_speed - yaw_left_speed)*time_elapsed;
+        delta_angle.j = (roll_right_speed - roll_left_speed)*time_elapsed;
+        delta_angle.k = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
+
+        delta_position.i = (left_speed - right_speed)*time_elapsed;
+        delta_position.j = (down_speed - up_speed)*time_elapsed; 
+        delta_position.k = (backward_speed - foward_speed)*time_elapsed;
+
+        //Updating the Camera Oobject 
+        camera.update(delta_angle, delta_position);
+
+        //Generating the Look At matrix
+        matrix.lookat(look_at, camera.position, camera.foward, camera.up, camera.right);
+
+        //Stored projected x, y, z, size and colour (Reset each loop)
+        std::vector<voxel> vox_proj;
+
+        //Loop for each point in Sprite
+        for (int k = 0; k < 3; k++)
+        {   
+            for (int j = 0; j < 5; j++)
+            {
+                for (int i = 0; i < 5; i++)
+                {   
+                    if (vox[k][j][i].a != 0)
+                    {
+                        //Moving data
+                        point.i = i;
+                        point.j = j;    
+                        point.k = k; 
+
+                        //This is used to move the point 1 unit perpindicular to the camera so we can find size
+                        point2.i = point.i + camera.right.i;
+                        point2.j = point.j + camera.right.j;
+                        point2.k = point.k + camera.right.k;
+
+                        //Camera Manipulation
+                        camera_view = matrix.vector_multiplication(point, look_at);
+                        vect test   = matrix.vector_multiplication(point2, look_at);
+
+                        //Projectring from 3d into 2d then normalizing  
+                        result = matrix.vector_multiplication(camera_view, projection);
+                        result = vectr.divide(result, result.w);
+
+                        test2 = matrix.vector_multiplication(test, projection);
+                        test2 = vectr.divide(test2, test2.w);
+
+                        //Storing the Projected Positions and other Voxel Characteristics 
+                        temp.position.i = (result.i + 1.0)*screen_width/2; 
+                        temp.position.j = (result.j + 1.0)*screen_width/2; 
+                        temp.position.k = (result.k + 1.0)*screen_width/2; 
+
+                        //Calculating square Size
+                        temp.size = (pow(pow(result.i - test2.i ,2) + pow(result.j - test2.j ,2), 0.5))*screen_width/2.0f;
+
+                        //Looking Up the Colour from the Structure
+                        temp.colour.r = vox[k][j][i].r; 
+                        temp.colour.g = vox[k][j][i].g;
+                        temp.colour.b = vox[k][j][i].b;
+
+                        //Stores Each Voxel in Projection space
+                        vox_proj.push_back(temp);
+                    };
+                }; 
+            };
+        };
+        
+        //Sorting Voxels from back to front
+        std::sort(vox_proj.begin(), vox_proj.end(), [](voxel vox1, voxel vox2)
+        {
+            return vox1.position.k > vox2.position.k;
+        });
+
+        //Render Using Painter Algorthim (Some fancy vector loop thingo thats uses Range C++11)
+        for(auto temp : vox_proj)
+        {   
+            //Defining the Rectangle 
+            rect.x = temp.position.i; 
+            rect.y = temp.position.j;
+            rect.w = temp.size;
+            rect.h = temp.size;
+
+            //Drawing the Rectangle 
+            SDL_SetRenderDrawColor(renderer, temp.colour.r, temp.colour.g, temp.colour.b, 255);
+            SDL_RenderFillRect(renderer, &rect);
+        }
+
+        //Render the screen
+        SDL_RenderPresent(renderer); 
+
+        // Clear the current renderer
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+    };
+
+    //Destroy and Clode SDL after program finishes
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+
+    SDL_Quit();
+
+    return 0;
+}
 
 /*
 class aircraft: public object 
@@ -804,269 +1171,3 @@ class aircraft: public object
         };
 };
 */
-
-//Point Definition
-float points[8][4] = 
-{
-    {0, 0 ,0, 1},
-    {1, 0 ,0, 1},
-    {1, 1, 0, 1},
-    {0, 1, 0, 1},
-    {0, 0, 1, 1},
-    {1, 0, 1, 1},
-    {1, 1, 1, 1},
-    {0, 1, 1, 1}
-};
-
-float updated[8][2];
-float look_at[4][4];
-float projection[4][4];
-
-//
-//Main Function
-//
-int main(int argc, char *argv[]) 
-{  
-    //Starting Setup
-    printf("Starting Setup\n");
-
-    //Setting up SDL (Credit to Jack)
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window*window  = SDL_CreateWindow("Testing", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
-    SDL_Renderer*renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-    SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
-    SDL_Event window_event;
-
-    //Declaring Objects (Used for there functions)
-    object camera; 
-    vect vector;
-    mat  matrix; 
-    quat quater;
-    
-    //Defining the contenet of the matrix as 0
-    matrix.clear(look_at);
-    matrix.clear(projection);
-
-    //Creating Projection Matrix 
-    matrix.projection(projection, camera_view_angle,  screen_height,  screen_width,  z_max_distance,  z_min_distance);
-
-    //Velocities for the Camera
-    vect point;
-    vect result;
-    vect camera_view;
-    vect delta_position;
-    vect delta_angle;
-
-    //Initializing Speeds 
-    float left_speed = 0;     float yaw_left_speed = 0;
-    float right_speed = 0;    float yaw_right_speed = 0;
-    float down_speed = 0;     float pitch_down_speed = 0;
-    float up_speed = 0;       float pitch_up_speed = 0;
-    float foward_speed = 0;   float roll_right_speed = 0;
-    float backward_speed = 0; float roll_left_speed = 0;
-
-    //Setting Angular and Translational Velocities
-    float velocity = 8;       float angular_velocity = 2;
-
-    //Initializing Game Time 
-    float game_time = SDL_GetTicks(); 
-    float time_elapsed = 0; 
-
-    //Main Loop 
-    while (run == 1)
-    {
-        while (SDL_PollEvent(&window_event)){
-            switch( window_event.type ){
-                case SDL_QUIT:
-                    run = 0;
-                    break;
-                    // Look for a keypress
-                case SDL_KEYDOWN:
-                    // Check the SDLKey values and move change the coords
-                    switch( window_event.key.keysym.sym ){
-                        //Translation Keys 
-                        case SDLK_LEFT:
-                            left_speed = velocity;
-                            break; 
-                        case SDLK_RIGHT:
-                            right_speed = velocity;                      
-                            break; 
-                        case SDLK_UP:
-                            up_speed = velocity;
-                            break; 
-                        case SDLK_DOWN:
-                            down_speed = velocity;
-                            break;
-                        case SDLK_r:
-                            foward_speed = velocity;
-                            break; 
-                        case SDLK_f:
-                            backward_speed = velocity;
-                            break;                            break; 
-
-                        //Rotation Keys  
-                        case SDLK_w:
-                            yaw_left_speed = angular_velocity;
-                            break; 
-                        case SDLK_s:
-                            yaw_right_speed = angular_velocity;                      
-                            break; 
-                        case SDLK_a:
-                            pitch_up_speed = angular_velocity;
-                            break; 
-                        case SDLK_d:
-                            pitch_down_speed = angular_velocity;
-                            break;  
-                        case SDLK_e:
-                            roll_right_speed = angular_velocity;
-                            break; 
-                        case SDLK_q:
-                            roll_left_speed = angular_velocity;
-                            break;                              
-
-                        //Defualt      
-                        default:    
-                            break;
-                    }
-                    break;
-
-                case SDL_KEYUP:
-                    // Check the SDLKey values and move change the coords
-                    switch( window_event.key.keysym.sym ){
-                        //Translation Keys 
-                        case SDLK_LEFT:
-                            left_speed = 0;
-                            break; 
-                        case SDLK_RIGHT:
-                            right_speed = 0;                      
-                            break; 
-                        case SDLK_UP:
-                            up_speed = 0;
-                            break; 
-                        case SDLK_DOWN:
-                            down_speed = 0;
-                            break; 
-                        case SDLK_r:
-                            foward_speed = 0;
-                            break; 
-                        case SDLK_f:
-                            backward_speed = 0;
-                            break;   
-
-                        //Rotation Keys  
-                        case SDLK_w:
-                            yaw_left_speed = 0;
-                            break; 
-                        case SDLK_s:
-                            yaw_right_speed = 0;                      
-                            break; 
-                        case SDLK_a:
-                            pitch_up_speed = 0;
-                            break; 
-                        case SDLK_d:
-                            pitch_down_speed = 0;
-                            break;  
-                        case SDLK_e:
-                            roll_right_speed = 0;
-                            break; 
-                        case SDLK_q:
-                            roll_left_speed = 0;
-                            break;                                 
-
-                        //Defualt      
-                        default:    
-                            break;
-                    }
-                    break;
-            }
-        }
-
-        //Updating Time (in seconds)
-        time_elapsed = (game_time - SDL_GetTicks())/1000;
-        game_time = SDL_GetTicks();
-
-        //Updating Positions and Angles
-        delta_angle.i = (yaw_right_speed - yaw_left_speed)*time_elapsed;
-        delta_angle.j = (roll_right_speed - roll_left_speed)*time_elapsed;
-        delta_angle.k = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
-
-        delta_position.i = (left_speed - right_speed)*time_elapsed;
-        delta_position.j = (up_speed - down_speed)*time_elapsed; 
-        delta_position.k = (foward_speed - backward_speed)*time_elapsed;
-
-        //Updating the Camera Oobject 
-        camera.update(delta_angle, delta_position);
-
-        //Generating the LookAt matrix
-        matrix.lookat(look_at, camera.position, camera.foward, camera.up, camera.right);
-
-        //Loop for each point
-        for(int l = 0; l < 50; l++)
-        {
-            for(int k = 0; k < 50; k++)
-            {
-                for (int i = 0; i < 8; i++)
-                {   
-                    //Moving data
-                    point.i = points[i][0] + l;
-                    point.j = points[i][1];    
-                    point.k = points[i][2] + k; 
-
-                    //Camera Manipulation
-                    camera_view = matrix.vector_multiplication(point, look_at);
-
-                    //Projectring from 3d into 2d then normalizing  
-                    result = matrix.vector_multiplication(camera_view, projection);
-                    result = vector.divide(result, result.w);
-
-                    //Scaling into screen (because Projection space is from -1 to 1)
-                    updated[i][0] = (result.i + 1.0)*screen_width/2;
-                    updated[i][1] = (result.j + 1.0)*screen_width/2; 
-                };
-
-                //Drawing the Sides of the Cubes 
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-                //Front 
-                SDL_RenderDrawLine(renderer, updated[0][0], updated[0][1], updated[1][0], updated[1][1]);
-                SDL_RenderDrawLine(renderer, updated[1][0], updated[1][1], updated[2][0], updated[2][1]);
-                SDL_RenderDrawLine(renderer, updated[2][0], updated[2][1], updated[3][0], updated[3][1]);
-                SDL_RenderDrawLine(renderer, updated[3][0], updated[3][1], updated[0][0], updated[0][1]);
-
-                //Back
-                SDL_RenderDrawLine(renderer, updated[4][0], updated[4][1], updated[5][0], updated[5][1]);
-                SDL_RenderDrawLine(renderer, updated[5][0], updated[5][1], updated[6][0], updated[6][1]);
-                SDL_RenderDrawLine(renderer, updated[6][0], updated[6][1], updated[7][0], updated[7][1]);
-                SDL_RenderDrawLine(renderer, updated[7][0], updated[7][1], updated[4][0], updated[4][1]);
-
-                //Left
-                SDL_RenderDrawLine(renderer, updated[1][0], updated[1][1], updated[2][0], updated[2][1]);
-                SDL_RenderDrawLine(renderer, updated[2][0], updated[2][1], updated[6][0], updated[6][1]);
-                SDL_RenderDrawLine(renderer, updated[6][0], updated[6][1], updated[5][0], updated[5][1]);
-                SDL_RenderDrawLine(renderer, updated[5][0], updated[5][1], updated[1][0], updated[1][1]);
-                
-                ////Right
-                SDL_RenderDrawLine(renderer, updated[0][0], updated[0][1], updated[3][0], updated[3][1]);
-                SDL_RenderDrawLine(renderer, updated[3][0], updated[3][1], updated[7][0], updated[7][1]);
-                SDL_RenderDrawLine(renderer, updated[7][0], updated[7][1], updated[4][0], updated[4][1]);
-                SDL_RenderDrawLine(renderer, updated[4][0], updated[4][1], updated[0][0], updated[0][1]);
-            };
-        };
-
-        //Render the screen
-        SDL_RenderPresent(renderer); 
-
-        // Clear the current renderer
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-    }
-
-    //Destroy and Clode SDL after program finishes
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-
-    SDL_Quit();
-
-    return 0;
-}
