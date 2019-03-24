@@ -1007,7 +1007,7 @@ int main(int argc, char *argv[])
         //Sorting Voxels from back to front
         std::sort(vox_proj.begin(), vox_proj.end(), [](voxel vox1, voxel vox2)
         {
-            return vox1.position.k > vox2.position.k;
+            return vox1.position.k < vox2.position.k;
         });
 
         //Render Using Painter Algorthim (Some fancy vector loop thingo thats uses Range C++11)
