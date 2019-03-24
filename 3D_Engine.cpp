@@ -197,6 +197,39 @@ class quat
         }; 
 };
 
+// So i can use min()
+#include <algorithm>
+
+class Jet_Engine {
+    // Effectively a sideways helicopter
+    public:
+        // The ratio of exhuast speed/rotational speed for the "propeller"
+        float prop_pitch = 0.06;
+        // Resistance from bearings, etc. in torque
+        float friction_torque_max = 19000; 
+        // The engines mass or whatever, resistance to acceleration
+        float rotational_inertia = 10;
+        
+        // Core speed, changes constantly
+        float rotational_speed = 0;
+        // Run once per frame
+        vect update(float throttle_percentage, float inlet_speed, float timestep) {
+            // Calculates generated power for this update, assume linear increase from zero
+            float generated_torque = 7*this->rotational_speed*throttle_percentage;
+            // Force on the engine, from the air
+            float air_force = pow(inlet_speed - this->rotational_speed * this->prop_pitch, 2);
+            // The torque on the core caused by the acceleration of air from inlet to outlet
+            float air_torque = air_force * this->prop_pitch;
+            // Mechanical friction acts to bring the rpm to zero, with a maximum effect
+            float mechanical_friction = std::min(friction_torque_max, rotational_speed * rotational_inertia / timestep);
+            
+            float rotational_change = ((generated_torque - air_torque - mechanical_friction) * timestep) / rotational_inertia;
+            this->rotational_speed = this->rotational_speed + rotational_change;
+
+            return(vect {air_force,0,0});
+        }
+};
+
 //The Matrix Class
 class mat 
 {
@@ -749,6 +782,7 @@ int main(int argc, char *argv[])
     vect vectr;
     mat  matrix; 
     quat quater;
+    Jet_Engine big_engine;
     
     //Defining the contenet of the matrix as 0
     matrix.clear(look_at);
@@ -895,7 +929,7 @@ int main(int argc, char *argv[])
         }
 
         //Updating Time (in seconds)
-        time_elapsed = (game_time - SDL_GetTicks())/1000;
+        time_elapsed = (SDL_GetTicks() - game_time)/1000;
         game_time = SDL_GetTicks();
 
         //Updating Positions and Angles
@@ -916,10 +950,14 @@ int main(int argc, char *argv[])
         //Stored projected x, y, z, size and colour (Reset each loop)
         std::vector<voxel> vox_proj;
 
+        vect engine_force = big_engine.update(1.0,0.0,time_elapsed);
+
+        printf("Engine Speed: %f\n",big_engine.rotational_speed);
+
         //Loop for each point in Sprite
         for (int k = 0; k < 3; k++)
         {   
-            for (int j = 0; j < 5; j++)
+            for (int j = 0; j < 5; j++)          
             {
                 for (int i = 0; i < 5; i++)
                 {   

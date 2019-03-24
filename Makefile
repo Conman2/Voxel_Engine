@@ -34,8 +34,8 @@ endif
 OBJS = 3D_Engine.cpp
 #CC specifies which compiler we're using
 CC = g++
-# Because of richards shitty code
-COMPILER_FLAGS += -fpermissive
+# Because of richards great code
+COMPILER_FLAGS += -g
 #OBJ_NAME specifies the name of our exectuable
 OBJ_NAME = Engine
 
