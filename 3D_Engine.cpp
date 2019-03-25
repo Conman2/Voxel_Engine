@@ -197,9 +197,6 @@ class quat
         }; 
 };
 
-// So i can use min()
-#include <algorithm>
-
 class Jet_Engine {
     // Effectively a sideways helicopter
     public:
@@ -723,36 +720,251 @@ struct voxel
 };
 
 //Making some colours for ron
-colour none = {0, 0, 0, 0};
-colour red = {255, 0, 0};
-colour blue = {0, 0, 255};
+colour none =  {0, 0, 0, 0};
+colour black = {0, 0, 0};
+colour red =   {255, 0, 0};
+colour blue =  {0, 0, 255};
 colour green = {0, 255, 0};
+colour purple = {128, 0, 128};
+colour yellow = {255, 255, 0} ;
+colour orange = {255, 127, 0};
 
-colour vox[3][5][5] = 
+colour vox[13][16][16] = 
 {
     {
-        {red, red, red, red, red},
-        {red, red, red, red, red},
-        {red, red, red, red, red},
-        {red, red, red, red, red},  
-        {red, red, red, red, red},     
+        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple}, 
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},  
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},     
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},  
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
     },
-
     {
-        {none, none, none, none, none},
-        {none, green, green, green, none},
-        {none, green, green, green, none},
-        {none, green, green, green, none}, 
-        {none, none, none, none, none},
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
     },
-
     {
-        {none, none, none, none, none},
-        {none, none, none, none, none},
-        {none, none, blue, none, none},
-        {none, none, none, none, none}, 
-        {none, none, none, none, none},       
-    }
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
+    },
+    {
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
+    },
+    {
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
+    },
+    {
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
+    },
+    {
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
+    },
+    {
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
+    },
+    {
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
+    },
+    {
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
+    },
+    {
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
+    },
+    {
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
+        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
+        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
+    },
+    {
+        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple}, 
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},  
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},     
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},  
+        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
+        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
+    },
 };
 
 float look_at[4][4];
@@ -770,6 +982,7 @@ int main(int argc, char *argv[])
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window*window  = SDL_CreateWindow("Testing", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     SDL_Renderer*renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    //SDL_RenderSetLogicalSize(renderer, screen_width/4, screen_width/4); 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
     SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
     SDL_Event window_event;
@@ -810,7 +1023,7 @@ int main(int argc, char *argv[])
     float backward_speed = 0; float roll_left_speed = 0;
 
     //Setting Angular and Translational Velocities
-    float velocity = 8;       float angular_velocity = 2;
+    float velocity = 12;       float angular_velocity = 3;
 
     //Initializing Game Time 
     float game_time = SDL_GetTicks(); 
@@ -955,23 +1168,23 @@ int main(int argc, char *argv[])
         printf("Engine Speed: %f\n",big_engine.rotational_speed);
 
         //Loop for each point in Sprite
-        for (int k = 0; k < 3; k++)
+        for (int k = 0; k < 13; k++)
         {   
-            for (int j = 0; j < 5; j++)          
+            for (int j = 0; j < 16; j++)          
             {
-                for (int i = 0; i < 5; i++)
+                for (int i = 0; i < 16; i++)
                 {   
                     if (vox[k][j][i].a != 0)
                     {
                         //Moving data
                         point.i = i;
                         point.j = j;    
-                        point.k = k; 
+                        point.k = k - 20; //Cheap Hack remove later (when add object class)
 
                         //This is used to move the point 1 unit perpindicular to the camera so we can find size
-                        point2.i = point.i + camera.right.i;
-                        point2.j = point.j + camera.right.j;
-                        point2.k = point.k + camera.right.k;
+                        point2.i = point.i + camera.up.i;
+                        point2.j = point.j + camera.up.j;
+                        point2.k = point.k + camera.up.k;
 
                         //Camera Manipulation
                         camera_view = matrix.vector_multiplication(point, look_at);
@@ -990,7 +1203,7 @@ int main(int argc, char *argv[])
                         temp.position.k = (result.k + 1.0)*screen_width/2; 
 
                         //Calculating square Size
-                        temp.size = (pow(pow(result.i - test2.i ,2) + pow(result.j - test2.j ,2), 0.5))*screen_width/2.0f;
+                        temp.size = (pow(pow(result.i - test2.i ,2) + pow(result.j - test2.j ,2), 0.5))*screen_width/1.2;
 
                         //Looking Up the Colour from the Structure
                         temp.colour.r = vox[k][j][i].r; 
