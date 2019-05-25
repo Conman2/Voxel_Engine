@@ -1,9 +1,8 @@
-//TODO 
-//Remove Data outside Camera Volume 
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h> 
+#include <fstream>
+#include <strstream>
 #include <algorithm>
 #include <vector>
 #include <SDL2/SDL.h>
@@ -31,10 +30,6 @@ const float z_min_distance = 0.1;
 //Game Run Condition
 int run = 1; 
 
-//Acessing Map Generation
-int generate_terrain(int , double , double , double , double, float **);
-
-//These Classes are used to store Data Structures and Functions 
 //The Vector Class
 class vect
 {   
@@ -197,7 +192,7 @@ class quat
         }; 
 };
 
-class Jet_Engine {
+class jet_engine {
     // Effectively a sideways helicopter
     public:
         // The ratio of exhuast speed/rotational speed for the "propeller"
@@ -702,7 +697,7 @@ class aircraft: public object
 };
 
 //Colour Struct
-struct colour
+struct colr
 {   
     //Colour Struct (Default is Solid White)
     int r = 0; 
@@ -711,261 +706,396 @@ struct colour
     int a = 255; 
 };
 
+//Making some colours for ron
+colr none   = {0, 0, 0, 0};
+colr black  = {0, 0, 0};
+colr red    = {255, 0, 0};
+colr blue   = {0, 0, 255};
+colr green  = {0, 255, 0};
+colr purple = {128, 0, 128};
+colr yellow = {255, 255, 0};
+colr orange = {255, 127, 0};
+
+/////////////////////////////////////////////////
+//Should move all this crap into the object class (so an octree is directly connected to a object)
+/////////////////////////////////////////////////
+
 //Voxel Struct 
 struct voxel
 {
     vect position; 
     float size; 
-    colour colour;
+    colr colour;
 };
 
-//Making some colours for ron
-colour none =  {0, 0, 0, 0};
-colour black = {0, 0, 0};
-colour red =   {255, 0, 0};
-colour blue =  {0, 0, 255};
-colour green = {0, 255, 0};
-colour purple = {128, 0, 128};
-colour yellow = {255, 255, 0} ;
-colour orange = {255, 127, 0};
+//Stores a vertix (a position in space)
+struct vertix
+{   
+    float x;
+    float y;
+    float z;
+};
 
-colour vox[13][16][16] = 
+//Stores a polygon (3 positions in space)
+struct polygon
+{   
+    vertix one; 
+    vertix two;
+    vertix thr;
+
+    wchar_t sym;
+	short col;
+}; 
+
+//Stores a Bounding box
+struct bounding_box
 {
-    {
-        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple}, 
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},  
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},     
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},  
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
-    },
-    {
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
-    },
-    {
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
-    },
-    {
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
-    },
-    {
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
-    },
-    {
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
-    },
-    {
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
-    },
-    {
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
-    },
-    {
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
-    },
-    {
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
-    },
-    {
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, orange, yellow, purple},       
-    },
-    {
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},  
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},       
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {yellow, none, none, none, none, none, none, none, none, none, none, none, none, none, none, yellow},  
-        {orange, none, none, none, none, none, none, none, none, none, none, none, none, none, none, orange},
-        {purple, yellow, orange, yellow, orange, yellow, orange, yellow,orange, yellow, orange, yellow, orange, yellow, orange, purple},       
-    },
-    {
-        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple}, 
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},  
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},     
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow, purple},  
-        {purple,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange,yellow,orange, purple},
-        {purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple, purple},
-    },
+    float min_x = 0;
+    float max_x = 0; 
+    float min_y = 0; 
+    float max_y = 0; 
+    float min_z = 0;
+    float max_z = 0; 
 };
+
+//Mostly Stollen from Random Internet Dude (javidx9)
+struct mesh
+{   
+    //This stores the Mesh for later voxelization
+	std::vector<polygon> triangle;
+
+    //This stores the AABB for voxelization
+    bounding_box aabb;
+
+	bool load_mesh(std::string sFilename)
+	{
+		std::ifstream f(sFilename);
+		if (!f.is_open())
+			return false;
+
+		// Local cache of verts
+		std::vector<vertix> verts;
+
+		while (!f.eof())
+		{
+			char line[128];
+			f.getline(line, 128);
+
+			std::strstream s;
+			s << line;
+
+			char junk;
+
+            //Vertices
+			if (line[0] == 'v')
+			{
+				vertix v;
+				s >> junk >> v.x >> v.y >> v.z;
+				verts.push_back(v);
+                
+                //Record the largest and smallest vertix for the Axis Aligned Bounding Box
+                if(v.x > aabb.max_x)
+                {
+                    aabb.max_x = v.x;
+                } 
+                else if (v.x < aabb.min_x)
+                {
+                    aabb.min_x = v.x;
+                }
+                else if(v.y > aabb.max_y)
+                {
+                    aabb.max_y = v.y;
+                } 
+                else if (v.y < aabb.min_y)
+                {
+                    aabb.min_y = v.y;
+                }
+                else if(v.z > aabb.max_z)
+                {
+                    aabb.max_z = v.z; 
+                } 
+                else if (v.z < aabb.min_z)
+                {
+                    aabb.min_z = v.z; 
+                };
+			};
+
+            //Faces
+			if (line[0] == 'f')
+			{
+				int f[3];
+				s >> junk >> f[0] >> f[1] >> f[2];
+				triangle.push_back({ verts[f[0] - 1], verts[f[1] - 1], verts[f[2] - 1] });
+			};
+		};
+
+		return true;
+	}
+}; 
+
+/////////////////////////////////////////////////
+//Should add different structs for leafs and nodes to save memory
+/////////////////////////////////////////////////
+
+//Octrees Struct
+struct octree_node
+{
+   octree_node *sub_nodes[8];
+   vect position = {0, 0, 0, 1};
+   //vect normal; //This might be useful for shading 
+   colr colour = red; 
+   float size = 0;
+   //0 = node, 1 = leaf, 2= empty
+   int type = 0; 
+};
+
+/////////////////////////////////////////////////
+//Will need to translate mesh to begin at origin to work with octree (when adding intersection testing)
+/////////////////////////////////////////////////
+
+//Calculates whether or not a Voxel intersects any Triangle in a Mesh (returning 1 means interestion occurs and 0 means no intersections)
+bool voxel_intersect_mesh(vect cube_position, float cube_size, mesh object)
+{   
+    return 1; 
+};
+
+//This is a Recursive Function which Builds the Octree
+octree_node construct_octree(octree_node node, vect current_position, float final_voxel_size, float current_voxel_size, mesh obj)
+{   
+    //The Voxel size halfs for each layer
+    float sub_voxel_size = current_voxel_size/2;
+    
+    //For each subnode
+    for (int i = 0; i ++; i < 8)
+    {   
+        //Make the sub node
+        octree_node sub_node;
+
+        //Calculate the Voxels Position (arbituary distrabution but cant see how this matters)
+        if (i > 4) 
+        {   
+            sub_node.position.k = current_position.k + sub_voxel_size; 
+        }   
+
+        if (i == 0 || i == 4)
+        {
+            sub_node.position = current_position; 
+        } 
+        else if (i == 1 || i == 5)
+        {   
+            sub_node.position= {current_position.i + sub_voxel_size, current_position.j, current_position.k};
+        }
+        else if (i == 2 || i == 6)
+        {
+            sub_node.position = {current_position.i, current_position.j - sub_voxel_size, current_position.k};
+        }
+        else if (i == 3 || i == 7)
+        {
+            sub_node.position = {current_position.i + sub_voxel_size, current_position.j - sub_voxel_size, current_position.k};
+        }
+
+        //Storing this Voxels Information
+        sub_node.size = sub_voxel_size;
+
+        //Check if The Voxel Intersects with any of the Mesh elements 
+        bool intersect = voxel_intersect_mesh(sub_node.position, sub_voxel_size, obj); 
+        
+        //If there is an intersection act accoardingly
+        if (intersect == 1)
+        {    
+            //If Voxel size is correct dont break it up any more
+            if (sub_voxel_size == final_voxel_size)
+            {
+                //This is an Octree leaf
+                sub_node.type = 1;
+            } 
+
+            //If Voxel size is larger break it up more
+            else 
+            {
+                //This is an Octree branch
+                sub_node.type = 0; 
+                sub_node = construct_octree(sub_node, sub_node.position, final_voxel_size, sub_node.size, obj); 
+            };
+        }
+
+        //This pointer can be left black
+        else 
+        {
+            //This is an empty location
+            sub_node.type = 2; 
+        }; 
+
+        //Link the subnode to into the tree
+        node.sub_nodes[i] = &sub_node;
+    };
+
+    return node;
+};
+
+//Turns a Mesh into a sparse Voxel Octree
+//Maybe Automate finding optimium octree_layers
+octree_node voxelization(float voxel_size, int octree_layers, mesh obj)
+{   
+    //Calculating the highest level Voxel Size
+    float final_voxel_size = voxel_size*2*octree_layers; 
+    
+    //Find the bouding Box 
+    vect octree_volume;  
+    int counter = 1; 
+
+    //Find the Appropiate Octree Size (The smallest size made up of the specified OCtree Size)
+    //Precalculating the bounding box in terms of 0 - size instead of Min - Max
+    float boxi = obj.aabb.max_x - obj.aabb.min_x; 
+    float boxj = obj.aabb.max_y - obj.aabb.min_y; 
+    float boxk = obj.aabb.max_z - obj.aabb.min_z; 
+
+    //This is determining the largest dimension of the Object 
+    while(boxi > octree_volume.i && boxj > octree_volume.j && boxk > octree_volume.k)
+    {
+        if (boxi > octree_volume.i)
+        {
+            octree_volume.i = final_voxel_size*counter;
+        };
+
+        if (boxj > octree_volume.j)
+        {
+            octree_volume.j = final_voxel_size*counter;
+        };
+
+        if (boxk > octree_volume.k)
+        {
+            octree_volume.k = final_voxel_size*counter;
+        };
+
+        counter += 1; 
+    }
+    
+    //Stores 0, 0, 0 as the origin of the Octree
+    vect origin; 
+
+    //Creating the Initial Octree
+    octree_node octree;
+    octree.position = origin;
+    octree.size = std::max(octree_volume.i, std::max(octree_volume.j, octree_volume.k)); //Pick the largest size for the dimensions of the octree 
+    octree.type = 0; //Saying that it is of type node
+
+    //Building the Octree
+    octree = construct_octree(octree, origin, voxel_size, final_voxel_size, obj);
+
+    return octree;
+};
+
+/////////////////////////////////////////////////
+//Should add shader (maybe ray marching)
+/////////////////////////////////////////////////
+
+//This is a recursive function made to render an octree                                                                                         
+void render_octree(octree_node tree, object camera, object test, mat matrix, vect vectr, std::vector<voxel> &vox_proj, float look_at[4][4], float projection[4][4])
+{   
+    //Only if this isnt an empty node
+    if(tree.type != 2)
+    { 
+        //If This is a leaf then render it 
+        if (tree.type == 1)
+        {
+            //Here Projection and rendering of the node should occur (only if it is a leaf and a visible colour (alpha > 0))
+            if (tree.colour.a != 0)
+            {   
+                //Predeclaring Variables 
+                vect point;
+                vect point2; 
+                vect camera_view;
+                vect result; 
+                vect sizer;
+                voxel temp; 
+
+                //Moving data
+                point.i = tree.position.i + test.position.i;
+                point.j = tree.position.j + test.position.j;    
+                point.k = tree.position.k + test.position.k;
+
+                //This is used to move the point 1 unit perpindicular to the camera so we can find size at its distance from the screen
+                point2.i = point.i + camera.up.i;
+                point2.j = point.j + camera.up.j;
+                point2.k = point.k + camera.up.k;
+
+                //Camera Manipulation
+                camera_view = matrix.vector_multiplication(point, look_at);
+                vect test   = matrix.vector_multiplication(point2, look_at);
+
+                //Projectring from 3d into 2d then normalizing  
+                result = matrix.vector_multiplication(camera_view, projection);
+                result = vectr.divide(result, result.w);
+
+                sizer = matrix.vector_multiplication(test, projection);
+                sizer = vectr.divide(sizer, sizer.w);
+
+                //Storing the Projected Positions and other Voxel Characteristics 
+                temp.position.i = (result.i + 1.0)*screen_width/2; 
+                temp.position.j = (result.j + 1.0)*screen_height/2; 
+                temp.position.k = result.k; 
+
+                //Calculating square Size
+                temp.size = (pow(pow(result.i - sizer.i ,2) + pow(result.j - sizer.j ,2), 0.5))*screen_width;
+
+                //only create a object to calculate if in Camera View Space
+                if (temp.position.k > 0 && temp.position.i + temp.size > 0 && temp.position.i < screen_width && temp.position.j + temp.size > 0 && temp.position.j < screen_height)
+                {
+                    //Looking Up the Colour from the Structure
+                    temp.colour.r = tree.colour.r; 
+                    temp.colour.g = tree.colour.g;
+                    temp.colour.b = tree.colour.b;
+
+                    //Stores Each Voxel in Projection space
+                    vox_proj.push_back(temp);
+                };
+            };
+        }
+
+        //Only if this isnt a leaf
+        else if (tree.type == 0)
+        {            
+            //Look at each subnode and run this function on each of them
+            for(int i = 0; i < 8; i++)
+            {   
+                octree_node next_node = *tree.sub_nodes[i];
+                render_octree(next_node, camera, test, matrix, vectr, vox_proj, look_at, projection);
+            };
+        };
+    };
+
+};  
+
+//doesnt do anything yet
+float ray_marching( vect origin, vect dir, float start, float end, int max_iteration, float stop_threshold, float step_scale) {
+	
+	float sceneDist = 1e4;
+	float rayDepth = start; 
+	for ( int i = 0; i < max_iteration; i++ ) {
+		
+		//sceneDist = scene( origin + dir * rayDepth ); //This used to store object positions  
+        
+		if (( sceneDist < stop_threshold ) || (rayDepth >= end)) 
+        {
+			break; 
+		}
+
+		rayDepth += sceneDist * step_scale;
+
+	}
+	
+	if (sceneDist >= stop_threshold) 
+    {
+        rayDepth = end;
+    }
+	else
+    {
+        rayDepth += sceneDist;
+    } 
+
+	return rayDepth;
+}
 
 float look_at[4][4];
 float projection[4][4];
@@ -975,27 +1105,23 @@ float projection[4][4];
 //
 int main(int argc, char *argv[]) 
 {  
-    //Starting Setup
-    printf("Starting Setup\n");
-
     //Setting up SDL (Credit to Jack)
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window*window  = SDL_CreateWindow("Testing", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     SDL_Renderer*renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    //SDL_RenderSetLogicalSize(renderer, screen_width/4, screen_width/4); 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
     SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
     SDL_Event window_event;
 
-    //Generating Terrain 
-    //generate_terrain(terrain_size, terrain_size, terrain_size, 3.0, 1, height);
-
     //Declaring Objects (Used for there functions)
     object camera; 
+    object test; 
     vect vectr;
     mat  matrix; 
     quat quater;
-    Jet_Engine big_engine;
+    jet_engine big_engine;
+
+    test.position.k = -50; //So camea doesn't start inside cube 
     
     //Defining the contenet of the matrix as 0
     matrix.clear(look_at);
@@ -1007,7 +1133,7 @@ int main(int argc, char *argv[])
     //Velocities for the Camera
     vect point2; 
     vect point;
-    vect test2;
+    vect sizer;
     vect result;
     vect camera_view;
     vect delta_position;
@@ -1023,7 +1149,7 @@ int main(int argc, char *argv[])
     float backward_speed = 0; float roll_left_speed = 0;
 
     //Setting Angular and Translational Velocities
-    float velocity = 12;       float angular_velocity = 3;
+    float velocity = 22;       float angular_velocity = 3;
 
     //Initializing Game Time 
     float game_time = SDL_GetTicks(); 
@@ -1032,6 +1158,12 @@ int main(int argc, char *argv[])
     //Defining an SDL Rectangle 
     SDL_Rect rect; 
 
+    //Loading the object
+    mesh tester; 
+    tester.load_mesh("teapot.obj");
+    octree_node octree;
+    octree = voxelization(1, 4, tester);
+    
     //Main Loop 
     while (run == 1)
     {
@@ -1139,7 +1271,7 @@ int main(int argc, char *argv[])
                     }
                     break;
             }
-        }
+        };
 
         //Updating Time (in seconds)
         time_elapsed = (SDL_GetTicks() - game_time)/1000;
@@ -1163,61 +1295,13 @@ int main(int argc, char *argv[])
         //Stored projected x, y, z, size and colour (Reset each loop)
         std::vector<voxel> vox_proj;
 
-        vect engine_force = big_engine.update(1.0,0.0,time_elapsed);
+        //Jacks Broken Engine
+        vect engine_force = big_engine.update(1.0,0.0, time_elapsed);
 
-        printf("Engine Speed: %f\n",big_engine.rotational_speed);
-
-        //Loop for each point in Sprite
-        for (int k = 0; k < 13; k++)
-        {   
-            for (int j = 0; j < 16; j++)          
-            {
-                for (int i = 0; i < 16; i++)
-                {   
-                    if (vox[k][j][i].a != 0)
-                    {
-                        //Moving data
-                        point.i = i;
-                        point.j = j;    
-                        point.k = k - 20; //Cheap Hack remove later (when add object class)
-
-                        //This is used to move the point 1 unit perpindicular to the camera so we can find size
-                        point2.i = point.i + camera.up.i;
-                        point2.j = point.j + camera.up.j;
-                        point2.k = point.k + camera.up.k;
-
-                        //Camera Manipulation
-                        camera_view = matrix.vector_multiplication(point, look_at);
-                        vect test   = matrix.vector_multiplication(point2, look_at);
-
-                        //Projectring from 3d into 2d then normalizing  
-                        result = matrix.vector_multiplication(camera_view, projection);
-                        result = vectr.divide(result, result.w);
-
-                        test2 = matrix.vector_multiplication(test, projection);
-                        test2 = vectr.divide(test2, test2.w);
-
-                        //Storing the Projected Positions and other Voxel Characteristics 
-                        temp.position.i = (result.i + 1.0)*screen_width/2; 
-                        temp.position.j = (result.j + 1.0)*screen_width/2; 
-                        temp.position.k = (result.k + 1.0)*screen_width/2; 
-
-                        //Calculating square Size
-                        temp.size = (pow(pow(result.i - test2.i ,2) + pow(result.j - test2.j ,2), 0.5))*screen_width/1.2;
-
-                        //Looking Up the Colour from the Structure
-                        temp.colour.r = vox[k][j][i].r; 
-                        temp.colour.g = vox[k][j][i].g;
-                        temp.colour.b = vox[k][j][i].b;
-
-                        //Stores Each Voxel in Projection space
-                        vox_proj.push_back(temp);
-                    };
-                }; 
-            };
-        };
-        
-        //Sorting Voxels from back to front
+        //Render the object 
+        render_octree(octree, camera, test, matrix, vectr, vox_proj, look_at, projection);
+    
+        //Sorting Voxels from back to front for the Painter Algorithim
         std::sort(vox_proj.begin(), vox_proj.end(), [](voxel vox1, voxel vox2)
         {
             return vox1.position.k < vox2.position.k;
@@ -1254,171 +1338,3 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-/*
-class aircraft: public object 
-{      
-    //Note that world space is z into screen, x horizontal and y vertical 
-    //For the aircraft body space, x is foward, y points down wing and z upwards 
-    private:
-        //Atmosheric Constants (SI Units)
-        float universal_gas_constant = 286.97f;
-        float troposhere_temperature_constant = 0.00651f; 
-        float temperature_kelvin = 273.15f; 
-        float ratio_specfic_heat = 1.4f; //Assumed constant 
-        float troposhere_altitude = 11000.0f; 
-        float gravity = 9.81f; 
-
-        //Sea Level Conditions 
-        float sea_level_temperature = 288.16f;
-        float sea_level_pressure = 101325.0f;
-        float sea_level_density = 1.225f; 
-
-        //
-        //Mass and Interial Properties 
-        //
-        float mass = 5000;
-        float Ixx = 21000;
-        float Iyy = 50000;
-        float Izz = 60000;
-        float Ixz = -1700;
-
-        //Inertia Constants for Ron
-        float c0 = Ixx*Izz - pow(Ixz, 2);
-        float c1 = Izz/c0; 
-        float c2 = Ixz/c0; 
-        float c3 = c2*(Ixx - Iyy + Izz);
-        float c4 = c1*(Iyy - Izz) - c2*Ixz;
-        float c5 = 1/Iyy; 
-        float c6 = c5*Ixz;
-        float c7 = c5*(Izz - Ixx);
-        float c8 = Ixx/c0; 
-        float c9 = c8*(Ixx - Iyy) + c2*Ixz; 
-
-
-    public: 
-
-        // 
-        //Axes 
-        //
-        vect wind; //?
-
-        vect body_axis; 
-        vect wind_axis;
-        vect earth_axis;  
-
-        vect aircraft_velocity;
-        vect aircraft_forces; 
-        vect aircraft_moments; 
-
-        //Angle between body and wind
-        vect stability_angles; 
-
-        //
-        //Geometery
-        //
-        float wing_area = 20.0f;
-        float wing_span = 10.0f; 
-        float wing_sweep = 0.0f; 
-        float taper_ratio = 0.25f; 
-
-        float lift_curve_infinite = 2.0f*3.1416f;
-        float zero_lift_drag = 0.02f; 
-        float zero_lift_alpha = 0.0f; //Needs to be calculated based on stuff
-        float oswald_factor = 0.8f;
-        float induce_drag; 
-
-        float lift_coefficient;
-        float drag_coefficient; 
-        float pitching_moment_coefficient = -0.1; //Assumed constant across Alpha 
-
-        //Calculated values 
-        float lift_curve = (3.1416f*aspect_ratio)/(1.0f + pow(1 + (3.1416f*aspect_ratio)/(lift_curve_infinite*cos(wing_sweep)), 0.5)); 
-        float aspect_ratio = pow(wing_span, 2)/wing_area; 
- 
-        //
-        //Control Surfaces 
-        //
-        vect control_surface_angle;
-        vect trim_tap_angle; 
-        
-        //
-        //Atmoshere (can add extension into troposhere)
-        //
-        float density;
-        float pressure;
-        float dynamic_pressure; 
-        float temperature;
-        float speed_of_sound;
-
-        ///
-        ///Forces and Moments 
-        ///
-
-        vect propulsive_forces_body;
-        vect forces_stability;
-        vect aerodynamic_forces; 
-        vect aerodynamic_moments;
-
-        vect angular_acceleration_body;
-
-        //Atmoshperic changes with altitude 
-        void atmosphere(float altitude)
-        {       
-            if(altitude < troposhere_altitude)
-            {
-                temperature = sea_level_temperature - troposhere_temperature_constant*altitude;
-                pressure = sea_level_pressure*pow((temperature/sea_level_temperature), 5.256); 
-                density = sea_level_density*pow((temperature/sea_level_temperature), 4.256);
-                speed_of_sound = pow(ratio_specfic_heat*universal_gas_constant*temperature, 0.5); 
-                dynamic_pressure = 0.5f*density*pow(aircraft_velocity.z, 2); //Assuming z velocity is majority of velocity (should pythag maybe?)
-            }; 
-
-        };
-        
-        //Wind behavior (should return a vector)
-        void wind_currents()
-        {      
-        }; 
-
-        //Predicting plane behavior
-        void equations_of_motion()
-        {
-            //Calculating Angular Acceleration Body Axis
-
-
-        };
-
-        //Currently Assuming that twist = 0 in CL calc;
-        void aerodynamics()
-        {   
-            
-
-            lift_coefficient = euler.y*lift_curve;
-            induce_drag = pow(lift_coefficient, 2)/(3.1416f*oswald_factor*aspect_ratio);
-            drag_coefficient = zero_lift_drag + induce_drag; 
-
-        }; 
-
-        void moments_and_forces()
-        {   
-            //Aerodynamic Forces
-            aerodynamic_force.x = ;
-            aerodynamic_force.y = ;
-            aer0dynamic_force.z = ;
-
-            //Calculating the total forces in the stability axis 
-            forces_stability.y = propulsive_forces_body.y + aerodynamic_forces.y;
-            forces_stability.x = propulsive_forces_body.x*cos(euler.y) - propulsive_forces_body.y*sin(euler.x) + aerodynamic_forces.z;
-            forces_stability.z = propulsive_forces_body.y*cos(euler.x) + propulsive_forces_body.z*sin(euler.x) + aerodynamic_forces.y;
-
-            //Calculating the total moments in the stability axis 
-
-        };
-
-        //Transforming the body to earth axes 
-        void body_to_earth_axes()
-        {
-
-        };
-};
-*/

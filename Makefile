@@ -17,7 +17,7 @@ ifeq ($(detected_OS),MSYS)
 	#COMPILER_FLAGS specifies the additional compilation options we're using
 	# -w suppresses all warnings
 	# -Wl,-subsystem,windows gets rid of the console window
-	COMPILER_FLAGS += -w -Wl,-subsystem,windows
+	COMPILER_FLAGS += -Ofast -Wl,-subsystem,windows
 	#INCLUDE_PATHS specifies the additional include paths we'll need
 	INCLUDE_PATHS += -IC:\mingw_dev_lib\include\SDL2
 	#LIBRARY_PATHS specifies the additional library paths we'll need
@@ -31,13 +31,13 @@ else
 endif
 
 #OBJS specifies which files to compile as part of the project
-OBJS = 3D_Engine.cpp
+OBJS = Updated_Version.cpp
 #CC specifies which compiler we're using
 CC = g++
 # Because of richards great code
 COMPILER_FLAGS += -g -fpermissive
 #OBJ_NAME specifies the name of our exectuable
-OBJ_NAME = Engine
+OBJ_NAME = Updated_Version
 
 #This is the target that compiles our executable
 all : $(OBJS)
