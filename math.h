@@ -16,36 +16,37 @@ struct vect
 vect vector_add(vect vector1, vect vector2)
 {
     return {vector1.i + vector2.i, vector1.j + vector2.j, vector1.k + vector2.k, 1};
-}
+};
 
 //Vector Subtracting 
 vect vector_subtract(vect vector1, vect vector2)
 {
     return {vector1.i - vector2.i, vector1.j - vector2.j, vector1.k - vector2.k, 1};
-}
+};
 
 //Vector Multiplication with Constant
 vect vector_multiply(vect vector, float constant)
 {
     return {vector.i * constant, vector.j * constant, vector.k * constant, 1};
-}
+};
 
+//Vector divided with constant
 vect vector_divide(vect vector, float constant)
 {
     return {vector.i / constant, vector.j / constant, vector.k / constant, 1};
-}
+};
 
 //Dot Product 
 float vector_dot_product(vect vector1, vect vector2)
 {
     return {vector1.i * vector2.i + vector1.j * vector2.j + vector1.k * vector2.k}; 
-}
+};
 
 //Cross Product
 vect vector_cross_product(vect vector1, vect vector2)
 {   
     return {vector1.j * vector2.k - vector1.k * vector2.j, vector1.k * vector2.i - vector1.i * vector2.k, vector1.i * vector2.j - vector1.j * vector2.i, 1};
-}
+};
 
 //Magnitude of a vector
 float vector_magnitude(vect vector)
@@ -57,7 +58,17 @@ float vector_magnitude(vect vector)
 vect vector_normalize(vect vector)
 {  
     return vector_divide(vector, vector_magnitude(vector));
-}
+};
+
+// float heading_angle(vect foward, vect world_foward)
+// {
+// 	vect projected = vector_divide(foward, pow(foward.j*foward.j + foward.k*foward.k, 0.5)); 
+
+// 	float dot = projected.j*world_foward.j + projected.k*world_foward.k;
+// 	float det = projected.j*world_foward.k + projected.k*world_foward.j;
+
+// 	return atan2(det, dot)*180/3.142 + 180;
+// }; 
 
 //***********
 //QUATERNIONS
@@ -95,7 +106,7 @@ void quaternion_normalize(quat vector)
     float length = pow(pow(vector.x, 2) + pow(vector.y, 2) + pow(vector.z, 2) + pow(vector.w, 2), 0.5);
 
     vector = quaternion_divide(vector, length);
-}
+};
 
 //The basic quaternion structure 
 quat quaternion_structure(vect axis, float angle)
@@ -124,7 +135,7 @@ quat quaternion_setup(quat total_quaternion, vect angle, vect x_axis, vect y_axi
 
     return quaternion;
 
-    /* This Way Does it all at once and more efficiently and should be reimplented 
+    /* This Way Does it all at once and more efficiently and should be reimplented (tried and didnt work)
     //precompute to save on processing time
     float cosX = cos( angle[1] / 2 );
     float cosY = cos( angle[2] / 2 );
@@ -168,6 +179,37 @@ vect quaternion_rotation(quat quaternion, vect position)
     return(vector_from_quaternion(quaternion_multiply(quaternion_multiply(quaternion, quaternion_from_vector(position)), conjugate)));
 }; 
 
+// Angles between Vectors
+vect quaternion_to_euler(quat quaternion)
+{		
+		vect result; 
+
+		double sqw = quaternion.w*quaternion.w;
+		double sqx = quaternion.x*quaternion.x;
+		double sqy = quaternion.y*quaternion.y;
+		double sqz = quaternion.z*quaternion.z;
+		double unit = sqx + sqy + sqz + sqw; // if normalised is one, otherwise is correction factor
+		double test = quaternion.x*quaternion.y + quaternion.z*quaternion.w;
+
+		if (test > 0.499*unit) { // singularity at north pole
+			result.j = 2 * atan2(quaternion.x,quaternion.w);
+			result.i = 3.142/2;
+			result.k = 0;
+			return result;
+		}
+		if (test < -0.499*unit) { // singularity at south pole
+			result.j = -2 * atan2(quaternion.x,quaternion.w);
+			result.i = -3.142/2;
+			result.k = 0;
+			return result;
+		}
+
+		result.j = atan2(2*quaternion.y*quaternion.w-2*quaternion.x*quaternion.z , sqx - sqy - sqz + sqw);
+		result.i = asin(2*test/unit);
+		result.k = atan2(2*quaternion.x*quaternion.w-2*quaternion.y*quaternion.z , -sqx + sqy - sqz + sqw);
+		return result; 
+};
+
 //******** 
 //MATRICES
 //********
@@ -183,7 +225,7 @@ vect matrix_vector_multiplication(vect vector, float matrix[4][4])
     result.w = vector.i* matrix[3][0] + vector.j * matrix[3][1] + vector.k * matrix[3][2] + vector.w * matrix[3][3];
 
     return result;
-}
+};
 
 //Look at Matrix
 void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_direction, vect world_up, vect camera_right)
@@ -204,7 +246,7 @@ void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_directi
     matrix[1][0] = camera_up.i;        matrix[1][1] = camera_up.j;        matrix[1][2] = camera_up.k;        matrix[1][3] = -vector_dot_product(camera_up, camera_position);
     matrix[2][0] = camera_direction.i; matrix[2][1] = camera_direction.j; matrix[2][2] = camera_direction.k; matrix[2][3] = -vector_dot_product(camera_direction, camera_position);
     matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1; 
-}
+};
 
 void matrix_projection(float matrix[4][4], float camera_view_angle, float screen_height, float screen_width, float z_max_distance, float z_min_distance)
 {
@@ -233,19 +275,7 @@ void matrix_clear(float matrix[4][4])
             matrix[i][j] = 0.0;
         }
     }
-}  
-
-//Clears a 4x4 matrix and sets the content to 0
-void matrix_equalize_bool4x6(bool matrix1[6][4], const bool matrix2[6][4])
-{
-	for (int i = 0; i < 6; i ++)
-	{     
-		for (int j = 0; j < 4; j ++)
-		{
-            matrix1[i][j] = matrix2[i][j];
-        }
-    }
-}  
+};
 
 //*********************
 //Collision Detetection 
