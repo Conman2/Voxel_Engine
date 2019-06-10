@@ -60,16 +60,6 @@ vect vector_normalize(vect vector)
     return vector_divide(vector, vector_magnitude(vector));
 };
 
-// float heading_angle(vect foward, vect world_foward)
-// {
-// 	vect projected = vector_divide(foward, pow(foward.j*foward.j + foward.k*foward.k, 0.5)); 
-
-// 	float dot = projected.j*world_foward.j + projected.k*world_foward.k;
-// 	float det = projected.j*world_foward.k + projected.k*world_foward.j;
-
-// 	return atan2(det, dot)*180/3.142 + 180;
-// }; 
-
 //***********
 //QUATERNIONS
 //***********
@@ -182,37 +172,87 @@ vect quaternion_rotation(quat quaternion, vect position)
 // Angles between Vectors
 vect quaternion_to_euler(quat quaternion)
 {		
-		vect result; 
+	// vect result; 
 
-		double sqw = quaternion.w*quaternion.w;
-		double sqx = quaternion.x*quaternion.x;
-		double sqy = quaternion.y*quaternion.y;
-		double sqz = quaternion.z*quaternion.z;
-		double unit = sqx + sqy + sqz + sqw; // if normalised is one, otherwise is correction factor
-		double test = quaternion.x*quaternion.y + quaternion.z*quaternion.w;
+	// double sqw = quaternion.w*quaternion.w;
+	// double sqx = quaternion.x*quaternion.x;
+	// double sqy = quaternion.y*quaternion.y;
+	// double sqz = quaternion.z*quaternion.z;
+	// double unit = sqx + sqy + sqz + sqw; // if normalised is one, otherwise is correction factor
+	// double test = quaternion.x*quaternion.y + quaternion.z*quaternion.w;
 
-		if (test > 0.499*unit) { // singularity at north pole
-			result.j = 2 * atan2(quaternion.x,quaternion.w);
-			result.i = 3.142/2;
-			result.k = 0;
-			return result;
-		}
-		if (test < -0.499*unit) { // singularity at south pole
-			result.j = -2 * atan2(quaternion.x,quaternion.w);
-			result.i = -3.142/2;
-			result.k = 0;
-			return result;
-		}
+	// // singularity at north pole
+	// if (test > 0.499*unit) 
+	// {
+	// 	result.j = 2 * atan2(quaternion.x,quaternion.w);
+	// 	result.i = 3.142/2;
+	// 	result.k = 0;
+	// }
 
-		result.j = atan2(2*quaternion.y*quaternion.w-2*quaternion.x*quaternion.z , sqx - sqy - sqz + sqw);
-		result.i = asin(2*test/unit);
-		result.k = atan2(2*quaternion.x*quaternion.w-2*quaternion.y*quaternion.z , -sqx + sqy - sqz + sqw);
-		return result; 
+	// // singularity at south pole
+	// else if (test < -0.499*unit) 
+	// {
+	// 	result.j = -2 * atan2(quaternion.x,quaternion.w);
+	// 	result.i = -3.142/2;
+	// 	result.k = 0;
+
+	// }
+
+	// //If not then
+	// else 
+	// {
+	// 	result.j = atan2(2*quaternion.y*quaternion.w-2*quaternion.x*quaternion.z , sqx - sqy - sqz + sqw);
+	// 	result.i = asin(2*test/unit);
+	// 	result.k = atan2(2*quaternion.x*quaternion.w-2*quaternion.y*quaternion.z , -sqx + sqy - sqz + sqw);
+	// }
+	
+	// return result; 
+
+	vect euler;
+
+	// if the input quaternion is normalized, this is exactly one. Otherwise, this acts as a correction factor for the quaternion's not-normalizedness
+	float unit = (quaternion.x * quaternion.x) + (quaternion.y * quaternion.y) + (quaternion.z * quaternion.z) + (quaternion.w * quaternion.w);
+
+	// this will have a magnitude of 0.5 or greater if and only if this is a singularity case
+	float test = quaternion.x * quaternion.w - quaternion.y * quaternion.z;
+
+	if (test > 0.4995f * unit) // singularity at north pole
+	{
+		euler.i = 3.14159 / 2;
+		euler.j = 2.0f * atan2(quaternion.y, quaternion.x);
+		euler.k = 0;
+	}
+	else if (test < -0.4995f * unit) // singularity at south pole
+	{
+		euler.i = -3.14159 / 2;
+		euler.j = -2.0f * atan2(quaternion.y, quaternion.x);
+		euler.k = 0;
+	}
+	else // no singularity - this is the majority of cases
+	{
+		euler.i = asin(2.0f * (quaternion.w * quaternion.x - quaternion.y * quaternion.z));
+		euler.j = atan2(2.0f * quaternion.w * quaternion.y + 2.0f * quaternion.z * quaternion.x, 1 - 2.0f * (quaternion.x * quaternion.x + quaternion.y * quaternion.y));
+		euler.k = atan2(2.0f * quaternion.w * quaternion.z + 2.0f * quaternion.x * quaternion.y, 1 - 2.0f * (quaternion.z * quaternion.z + quaternion.x * quaternion.x));
+	}
+
+	return euler;
 };
 
 //******** 
 //MATRICES
 //********
+
+//Clears a 4x4 matrix and sets the content to 0
+void matrix_clear(float matrix[4][4])
+{
+	for (int i = 0; i < 5; i ++)
+	{     
+		for (int j = 0; j < 5; j ++)
+		{
+            matrix[i][j] = 0.0;
+        }
+    }
+};
 
 //Matrix Vector Multiplication (note that with this function input and output must be different variables)
 vect matrix_vector_multiplication(vect vector, float matrix[4][4])
@@ -228,28 +268,26 @@ vect matrix_vector_multiplication(vect vector, float matrix[4][4])
 };
 
 //Look at Matrix
-void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_direction, vect world_up, vect camera_right)
+void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_foward, vect camera_up, vect camera_right)
 {
-    // //Calculating the Camera Looking Direction
-    //vect camera_direction = vector_subtract(camera_position, camera_target); 
-    //vector_normalize(camera_direction);
-
-    //Calculating new up
-    vect camera_up = vector_subtract(vector_multiply(camera_direction, vector_dot_product(world_up, camera_direction)), world_up);//Might need t0 be reversed
-    vector_normalize(camera_up);
-
-    //Calculating Camera Right Direction
-    //vect camera_right = cross_product(camera_up, camera_direction);
-
     //Look At Matrix 
-    matrix[0][0] = camera_right.i;     matrix[0][1] = camera_right.j;     matrix[0][2] = camera_right.k;     matrix[0][3] = -vector_dot_product(camera_right, camera_position);
-    matrix[1][0] = camera_up.i;        matrix[1][1] = camera_up.j;        matrix[1][2] = camera_up.k;        matrix[1][3] = -vector_dot_product(camera_up, camera_position);
-    matrix[2][0] = camera_direction.i; matrix[2][1] = camera_direction.j; matrix[2][2] = camera_direction.k; matrix[2][3] = -vector_dot_product(camera_direction, camera_position);
-    matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1; 
+    // matrix[0][0] = camera_right.i;     matrix[0][1] = camera_right.j;     matrix[0][2] = camera_right.k;     matrix[0][3] = -vector_dot_product(camera_right,     camera_position);
+    // matrix[1][0] = camera_up.i;        matrix[1][1] = camera_up.j;        matrix[1][2] = camera_up.k;        matrix[1][3] = -vector_dot_product(camera_up,        camera_position);
+    // matrix[2][0] = camera_foward.i;    matrix[2][1] = camera_foward.j;    matrix[2][2] = camera_foward.k;    matrix[2][3] = -vector_dot_product(camera_foward,    camera_position);
+    // matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1;  
+
+	//This seems like the correct rotation method
+	matrix[0][0] = camera_right.i;    matrix[0][1] = camera_up.i;    matrix[0][2] = camera_foward.i;    matrix[0][3] = 0;
+    matrix[1][0] = camera_right.j;    matrix[1][1] = camera_up.j;    matrix[1][2] = camera_foward.j;    matrix[1][3] = 0;
+    matrix[2][0] = camera_right.k;    matrix[2][1] = camera_up.k;    matrix[2][2] = camera_foward.k;    matrix[2][3] = 0;
+    matrix[3][0] = 0;                 matrix[3][1] = 0;              matrix[3][2] = 0;                  matrix[3][3] = 1;  
 };
 
 void matrix_projection(float matrix[4][4], float camera_view_angle, float screen_height, float screen_width, float z_max_distance, float z_min_distance)
 {
+	//Set all values to zero
+	matrix_clear(matrix); 
+
     //Projection Matrix Set-up
     float view_angle =    (float) camera_view_angle*(3.14159 / 180);
     float aspect_ratio =  (float) screen_height/screen_width;
@@ -265,20 +303,8 @@ void matrix_projection(float matrix[4][4], float camera_view_angle, float screen
     matrix[3][2] = 1; 
 };
 
-//Clears a 4x4 matrix and sets the content to 0
-void matrix_clear(float matrix[4][4])
-{
-	for (int i = 0; i < 5; i ++)
-	{     
-		for (int j = 0; j < 5; j ++)
-		{
-            matrix[i][j] = 0.0;
-        }
-    }
-};
-
 //*********************
-//Collision Detetection 
+//Collision Detetection AABB (voxel) and Polygon (Theory by Tomas Akenine-Moller, code from someelse)
 //*********************
 
 //This checks for intersection between polygon and voxel

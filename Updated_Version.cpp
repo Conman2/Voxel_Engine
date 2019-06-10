@@ -21,11 +21,15 @@
 //Normalize mesh size (rabbit reall small) also add scaling input to the mesh
 //Fix the voxelization algorithim 
 //Swithch to OpenGL projection and stuff 
-//Currently objects still are drawn past camera view box (makes no sense) and mirror world rabbit returns past that point
 //Make change in angle/position irrelevant to time
 //Flickering voxels when pitch is 0. Maybe add if pitch==0 pitch = 0.01 or something
 //Mess with aspect ratio stuff (voxel size varying with aspect ratio) (Currently limited to square to work propely) (maybe diagonal screen distance)
-//Mess with clipping plane
+//Behind Font Texture is black instead of alpha 
+//Holes open up when the object in corner of screen because you are essentially looking at the non-existant face of the cube (the one parrel with the view vector) To fixe this you must take into account the 3d shape of a voxel
+//Setup shaders to do stuff (projection/lighting)
+//Simplty camera class functions to an intialize, update, close
+//Rotate around an objets center (currently around the edge of the object)
+//Remove LookAt Matrix infastructure (Not being used anymore)
 
 //World State Variables 
 typedef Uint32 colour_format; 
@@ -34,16 +38,26 @@ const Uint32 pixel_format_id = SDL_PIXELFORMAT_RGBA32;
 //This stores all font textures 
 SDL_Texture* character_textures[95];
 
-const int fontsize = 2;
-const float voxel_size = 0.002f; //This is world voxel size 
+//Random Constants 
+const int fontsize = 3;
+const float voxel_size = 0.003f; //This is world voxel size 
 const int screen_width = 1000;
 const int screen_height = 1000;
 
-//The Universal Vectors
+//The Universal Origin and Axes 
 const vect world_origin = {0, 0, 0, 0};
-const vect world_right  = {1, 0, 0, 0};
-const vect world_up     = {0, 1, 0, 0};
-const vect world_foward = {0, 0, 1, 0};
+const vect world_right  = {1, 0, 0, 1};
+const vect world_up     = {0, 1, 0, 1};
+const vect world_foward = {0, 0, 1, 1};
+
+//Defining the mesh of a square
+// static const GLfloat vertex_data[] =
+// {
+//     -0.5f, -0.5f, 0.0f,
+//     0.5f,  -0.5f, 0.0f,
+//     -0.5f, 0.5f,  0.0f,
+//     0.5f,  0.5f,  0.0f,    
+// };
 
 //Colour Struct (Default is Solid White)
 struct colr
@@ -83,8 +97,8 @@ struct mesh
 
 		while (!f.eof())
 		{
-			char line[128];
-			f.getline(line, 128);
+			char line[136];
+			f.getline(line, 136);
 
 			std::strstream s;
 			s << line;
@@ -134,64 +148,173 @@ std::vector<voxel> voxel_projected;
 //Camera Class 
 class camera
 {
+    private: 
+        //HUD Information
+        int HUDsize = fontsize; //same as fontsize looks best (consistant pixel size)
+        SDL_Texture* stationaryHUD_texture; 
+        SDL_Texture* movingHUD_texture; 
+
+        //Camera data 
+        float view_angle = 270.0f; 
+        float z_max_distance = 10.0f;
+        float z_min_distance = 0.1f;
+
     public:
         //Object Behavior 
         vect position;
         quat quaternion;
         vect euler; 
 
-        //Objects local Axis 
+        //Objects Local Axes 
         vect up;
         vect right;
         vect foward;
-
-        //Camera data 
-        float view_angle = 90.0f; 
-        float z_max_distance = 10.0f;
-        float z_min_distance = 0.1f;
 
         //This objects Look At matrix (if it is a camera)
         float look_at[4][4];
         float projection[4][4];
 
-        //This updates the lookat Matrix (if this object is a camera)
-        void update_look_at()
-        {
-            matrix_lookat(look_at, position, foward, up, right);
-        };
-
-        //Sets up projection matrix
-        void set_up_projection_matrix()
-        {
-            matrix_clear(projection);
-            matrix_projection(projection, view_angle,  screen_height,  screen_width,  z_max_distance,  z_min_distance);
-        };
-
         //Updates the objects position and angle
-        void update_position_attitude(vect delta_angle, vect delta_position)
-        {      
+        void update(vect delta_angle, vect delta_position)
+        {     
+            //Updating Quaternion Angles (Axis Angle to Quaternion)
+            quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward) ;
+
+            //Updating Objects Local Axis from rotation
+            up     = vector_normalize(quaternion_rotation(quaternion, world_up)); 
+            right  = vector_normalize(quaternion_rotation(quaternion, world_right));
+            foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
+
             //Updating Position 
             position.i += delta_position.i*right.i + delta_position.j*up.i + delta_position.k*foward.i;
             position.j += delta_position.i*right.j + delta_position.j*up.j + delta_position.k*foward.j;
             position.k += delta_position.i*right.k + delta_position.j*up.k + delta_position.k*foward.k;
-            
-            //Updating Quaternion Angle
-            quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward);
 
-            //Updating Objects Local Axis based on rotation
-            foward = quaternion_rotation(quaternion, world_foward);
-            vector_normalize(foward);
-
-            up = quaternion_rotation(quaternion, world_up); 
-            vector_normalize(up);
-
-            right = vector_cross_product(foward, up);
-            vector_normalize(right);
-
-            //Calculating Euler Angles 
+            //Converting Quaternion Angle into Euler (so our puny minds can comprehend whats happening)
             euler = vector_add(vector_multiply(quaternion_to_euler(quaternion), 180/3.142), {180, 180, 180}); 
-            //euler.j = heading_angle(foward, world_foward); 
+        
+            //Update Look At Matrix
+            matrix_lookat(look_at, position, foward, up, right);
         };
+
+        //Sets up projection matrix
+        void intialize_projection_matrix()
+        {
+            matrix_projection(projection, view_angle, screen_height, screen_width, z_max_distance, z_min_distance);
+        };
+
+        //HUD System 
+        void intialize_HUD(SDL_Renderer *renderer, colr colour, SDL_PixelFormat* pixel_format)
+        {   
+            //
+            //Stationary Section 
+            //
+
+            //Defining Texture 
+            bool stationaryHUD[4][216] = 
+            {
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+            };     
+
+            //Creating texture
+            stationaryHUD_texture = SDL_CreateTexture(renderer, pixel_format_id, SDL_TEXTUREACCESS_STREAMING, 216, 4); 
+
+            // Create the texture
+            colour_format texture_data[4*216];
+
+            int counter = 0; 
+            for(int i = 0; i < 4; i++)
+            {   
+                for (int j = 0; j < 216; j++)
+                {
+                    //Assign texture colour
+                    if (stationaryHUD[i][j] == 1) 
+                    {
+                        texture_data[counter] = SDL_MapRGBA(pixel_format, colour.r,  colour.g, colour.b, colour.a); 
+                    }
+                    else
+                    {
+                        texture_data[counter] = SDL_MapRGBA(pixel_format, 0, 0, 0, 0);
+                    }; 
+
+                    //Update Total Positions 
+                    counter++; 
+                };
+            }; 
+
+            //Assign the texture
+            SDL_UpdateTexture(stationaryHUD_texture, NULL, texture_data, sizeof(colour_format)*216);
+            
+            //
+            //Moving Texture Section  
+            //
+            bool movingHUD[4][36] = 
+            {
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                
+            }; 
+
+            // Create the texture
+            colour_format moving_texture_data[4*36*42];
+
+            movingHUD_texture = SDL_CreateTexture(renderer, pixel_format_id, SDL_TEXTUREACCESS_STREAMING, 36*42, 4);
+
+            //For each degree in a compass
+            counter = 0;
+            for(int i = 0; i < 4; i++)
+            {   
+                for (int j = 0; j < 36*42; j++)
+                {
+                    //Assign texture colour
+                    if (movingHUD[i][j%36] == 1) 
+                    {
+                        moving_texture_data[counter] = SDL_MapRGBA(pixel_format, colour.r,  colour.g, colour.b, colour.a); 
+                    }
+                    else
+                    {
+                        moving_texture_data[counter] = SDL_MapRGBA(pixel_format, 0, 0, 0, 0);
+                    };
+
+                    //Update Total Positions 
+                    counter++; 
+                };
+            };                
+            
+            SDL_UpdateTexture(movingHUD_texture, NULL, moving_texture_data, sizeof(colour_format)*36*42);
+        }; 
+        
+        //Draw the HUD 
+        void render_HUD(SDL_Renderer *renderer, int position_x, int position_y )
+        {
+            //Rendering the stationary texture
+            SDL_Rect HUD_position = {position_x - 216*HUDsize/2, position_y, 216*HUDsize, 4*HUDsize}; 
+            SDL_RenderCopy(renderer, stationaryHUD_texture, NULL, &HUD_position);
+
+            //Preperation for the scrolling texture 
+            SDL_Rect HUD_position2 = {position_x - 216*HUDsize/2, position_y - 4*HUDsize, 216*HUDsize, 4*HUDsize}; 
+
+            //Cropping location of scrolling texture
+            int index =  (euler.j/10)*36; 
+            SDL_Rect cropping = {index, 0, 216, 4}; 
+            
+            //Cutting out the desired section of the scrolling texture
+            SDL_Texture* cropped = SDL_CreateTexture(renderer, pixel_format_id, SDL_TEXTUREACCESS_TARGET, cropping.w, cropping.h);          
+            SDL_SetRenderTarget(renderer, cropped);
+            SDL_RenderCopy(renderer, movingHUD_texture, &cropping, NULL);
+            SDL_SetRenderTarget(renderer, NULL);  
+
+            //Rendering the moving texture
+            SDL_RenderCopy(renderer, cropped, NULL, &HUD_position2);
+
+            //Destroy the texture now it has been used
+            SDL_DestroyTexture(cropped); 
+        }; 
 }; 
 
 //Stores Position and Attitude and object file
@@ -205,6 +328,7 @@ class object
     public:
         //Mesh Object 
         mesh polygon_mesh;  
+        vect half_size; 
 
         //This stores this objects voxels 
         std::vector<voxel> voxels; 
@@ -212,7 +336,7 @@ class object
         //Object Behavior 
         vect position;
         quat quaternion;
-        vect euler; 
+        //vect euler; 
 
         vect velocity; 
         vect angular_velocity; 
@@ -235,9 +359,9 @@ class object
             quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward);
 
             //Updating Objects Local Axis from rotation
+            up     = vector_normalize(quaternion_rotation(quaternion, world_up)); 
+            right  = vector_normalize(quaternion_rotation(quaternion, world_right));
             foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
-            up = vector_normalize(quaternion_rotation(quaternion, world_up)); 
-            right = vector_normalize(vector_cross_product(foward, up));
         };
 
         //This initializes a Voxel Object 
@@ -259,8 +383,8 @@ class object
                 while (!file.eof())
                 {
                     //not sure what this does
-                    char line[128];
-                    file.getline(line, 128);
+                    char line[136];
+                    file.getline(line, 136);
 
                     //Temporaly storing the line data
                     std::strstream thing;
@@ -290,6 +414,9 @@ class object
                 float boxi = polygon_mesh.max_x - polygon_mesh.min_x; 
                 float boxj = polygon_mesh.max_y - polygon_mesh.min_y; 
                 float boxk = polygon_mesh.max_z - polygon_mesh.min_z; 
+
+                //Object Half Size 
+                half_size = {boxi/2, boxj/2, boxk/2}; 
 
                 //Creates the box shape for storing the voxels 
                 voxel_volume = {ceil(boxi/voxel_size), ceil(boxj/voxel_size), ceil(boxk/voxel_size)};
@@ -374,8 +501,8 @@ class object
                 {  
                     float dp = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
 
-                    //Camera Manipulation
-                    vect camera_view = matrix_vector_multiplication(voxel_position, camera.look_at);
+                    //Camera Manipulation (LookAt Matrix Was Not Working!)
+                    vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
 
                     //Projectring from 3d into 2d then normalizing  
                     vect result = matrix_vector_multiplication(camera_view, projection);
@@ -387,7 +514,7 @@ class object
                     temp.position.j = (result.j + 1.0)*screen_height/2; 
                     temp.position.k = result.k; 
 
-                    //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize)
+                    //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
                     temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size; 
 
                     //only create a object to calculate if in Camera View Space
@@ -423,7 +550,7 @@ void write_to_screen(SDL_Renderer* renderer, SDL_Texture** character_textures, s
         //Calculating layer
         int index = character - 32; 
 
-        SDL_Rect font_position = {(int) position_x, (int) position_y, 5*fontsize, 7*fontsize}; 
+        SDL_Rect font_position = {position_x, position_y, 5*fontsize, 7*fontsize}; 
         SDL_RenderCopy(renderer, character_textures[index], NULL, &font_position);
 
         position_x += (5+1)*fontsize; 
@@ -447,7 +574,7 @@ void create_character_texture(SDL_Renderer *renderer, int index, const bool char
             //Assign texture colour
             if (character[i][j] == 1) 
             {
-                texture_data[counter] = SDL_MapRGBA(pixel_format, colour.r,  colour.g, colour.b, 255); 
+                texture_data[counter] = SDL_MapRGBA(pixel_format, colour.r,  colour.g, colour.b, colour.a); 
             }
             else
             {
@@ -492,7 +619,7 @@ void initialize_characters(SDL_Renderer *renderer, SDL_PixelFormat* pixel_format
 int main(int argc, char *argv[]) 
 {  
     //
-    //Setting up SDL (Credit to Jack)
+    //Setting up SDL
     //
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window*window  = SDL_CreateWindow("Testing", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL);
@@ -505,21 +632,51 @@ int main(int argc, char *argv[])
 
     //Defining an SDL Rectangle 
     SDL_Rect rectangle;
+
+    //
+    //Setting up OpenGL
+    //
+    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);	
+    // SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    // SDL_GLContext SDL_GL_CreateContext(window); 
+    //glEnable(GL_DEPTH_TEST);
+
+    // Clear back buffer
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     //Creating the Camera object
     camera camera;
-    camera.set_up_projection_matrix(); 
+    camera.intialize_projection_matrix(); 
 
     //This creates and Object asigns a mesh to it and then voxelizes that mesh
-    object test; 
-    test.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test.voxelization("rabbit_"); 
+    object test1; 
+    test1.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test1.voxelization("rabbit_"); 
+
+    object test2;
+    test2.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test2.voxelization("rabbit_");
+    test2.position = {0.5, 0, 0}; 
+
+    object test3;
+    test3.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test3.voxelization("rabbit_");
+    test3.position = {0, 0, 0.5}; 
+
+    object test4;
+    test4.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test4.voxelization("rabbit_");
+    test4.position = {0.5, 0, 0.5}; 
 
     //Setup font 
     initialize_characters(renderer, pixel_format, {255, 255, 255, 255}); 
+    
+    //Setup HUD 
+    camera.intialize_HUD(renderer, {255, 255, 255, 255}, pixel_format); 
 
     //Initializing Speeds 
-    float fps[5];  int fps_counter = 0;  float avg_fps; 
+    float fps[5];  int fps_counter = 0;  float avg_fps; float fps_timer;
     float left_speed = 0;     float yaw_left_speed = 0;
     float right_speed = 0;    float yaw_right_speed = 0;
     float down_speed = 0;     float pitch_down_speed = 0;
@@ -528,7 +685,7 @@ int main(int argc, char *argv[])
     float backward_speed = 0; float roll_left_speed = 0;
 
     //Setting Angular and Translational Velocities
-    float velocity = 1;       float angular_velocity = 2;
+    float velocity = 1;       float angular_velocity =  0.6;
 
     //Stores Change in position/angle
     vect delta_position;       vect delta_angle;
@@ -650,31 +807,27 @@ int main(int argc, char *argv[])
         time_elapsed = (SDL_GetTicks() - game_time)/1000;
         game_time = SDL_GetTicks();
 
-        //Averaging FPS
-        fps[fps_counter] = 1.0f/time_elapsed; 
-        if(fps_counter > 5) 
-        {
-            avg_fps = (fps[0] + fps[1] + fps[2] + fps[3] + fps[4])/5; 
-            fps_counter = 0;
-        }
-        fps_counter ++; 
-
         //Updating Positions and Angles
         delta_angle.i = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
-        delta_angle.j = -(yaw_right_speed - yaw_left_speed)*time_elapsed;
+        delta_angle.j = (yaw_right_speed - yaw_left_speed)*time_elapsed;
         delta_angle.k = -(roll_right_speed - roll_left_speed)*time_elapsed;
 
         delta_position.i = (left_speed - right_speed)*time_elapsed;
-        delta_position.j = (down_speed - up_speed)*time_elapsed; 
+        delta_position.j = -(down_speed - up_speed)*time_elapsed; 
         delta_position.k = (backward_speed - foward_speed)*time_elapsed;
     
         //Updating the Camera Object 
-        camera.update_position_attitude(delta_angle, delta_position);
-        camera.update_look_at(); 
+        camera.update(delta_angle, delta_position);
 
         //Render and update attitude
-        test.update_position_attitude({0,0.005,0},{0.0,0,0});
-        voxel_projected = test.project_voxels(camera, camera.projection, voxel_projected);
+        // test1.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
+        // test2.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
+        // test3.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
+        // test4.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
+        voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test2.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test3.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test4.project_voxels(camera, camera.projection, voxel_projected);
 
         //Render All of the voxels 
         for(auto voxels : voxel_projected)
@@ -705,16 +858,34 @@ int main(int argc, char *argv[])
         //Clear the stored voxels (otherwise would get infinitely big)
         voxel_projected.clear(); 
 
+        //Draw HUD 
+        camera.render_HUD(renderer, screen_width/2, 60.0f);
+
+        //Averaging FPS
+        fps_counter ++; fps_timer += time_elapsed; 
+        if(fps_timer > 0.2) 
+        {
+            avg_fps = fps_counter/fps_timer; 
+            fps_timer = 0; fps_counter = 0; 
+        }
+        
         //Writing FPS to screen
         write_to_screen(renderer, character_textures, std::to_string((int) avg_fps), 5.0f, 5.0f);
 
         //Write Position
-        std::string pos = "X:" + std::to_string(camera.position.i) + " Y:" + std::to_string(camera.position.j) + " Z:" + std::to_string(camera.position.k);
-        write_to_screen(renderer, character_textures, pos, 5.0f, screen_height - 100);
+        std::string positions = "X:" + std::to_string(camera.position.i) + " Y:" + std::to_string(camera.position.j) + " Z:" + std::to_string(camera.position.k);
+        write_to_screen(renderer, character_textures, positions, 5.0f, screen_height - 100);
 
         //Write Angles 
-        std::string ang = "aX:" + std::to_string(camera.euler.i) + " aY:" + std::to_string(camera.euler.j) + " aZ:" + std::to_string(camera.euler.k);
-        write_to_screen(renderer, character_textures, ang, 5.0f, screen_height - 50);        
+        std::string angles = "aX:" + std::to_string(camera.euler.i) + " aY:" + std::to_string(camera.euler.j) + " aZ:" + std::to_string(camera.euler.k);
+        write_to_screen(renderer, character_textures, angles, 5.0f, screen_height - 50);        
+
+        //
+        //OpenGL Rendering
+        //
+        //glClearColor(1.0, 1.0, 1.0, 1.0);
+        //glClear(GL_COLOR_BUFFER_BIT);
+        //SDL_GL_SwapWindow(window);
 
         //Render the screen
         SDL_RenderPresent(renderer); 
@@ -731,32 +902,4 @@ int main(int argc, char *argv[])
     SDL_Quit();
 
     return 0;
-}
-
-    //
-    //Setting up OpenGL
-    //
-    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);	
-    // SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    // SDL_GLContext SDL_GL_CreateContext(window); 
-    // glEnable(GL_DEPTH_TEST);
-
-    // // Clear back buffer
-    // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // //Defining the mesh of a square
-    // static const GLfloat vertex_data[] =
-    // {
-    //     -0.5f, -0.5f, 0.0f,
-    //     0.5f,  -0.5f, 0.0f,
-    //     -0.5f, 0.5f,  0.0f,
-    //     0.5f,  0.5f,  0.0f,    
-    // };
-
-    //
-    //OpenGL Rendering
-    //
-    // glClearColor(1.0, 1.0, 1.0, 1.0);
-    // glClear(GL_COLOR_BUFFER_BIT);
-    // SDL_GL_SwapWindow(window);
+};
