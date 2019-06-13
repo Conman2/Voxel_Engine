@@ -180,10 +180,7 @@ class camera
         //Updates the objects position and angle
         void update(vect delta_angle, vect delta_position)
         {     
-            //
             //Attitude Update
-            //
-
             //Updating Quaternion Angles (Axis Angle to Quaternion)
             quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward) ;
 
@@ -192,20 +189,13 @@ class camera
             right  = vector_normalize(quaternion_rotation(quaternion, world_right));
             foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
 
-            //Update Look At Matrix
-            matrix_lookat(look_at, position, foward, up, right);
-
             //Converting Quaternion Angle into Euler (so our puny minds can comprehend whats happening)
             euler = vector_add(vector_multiply(quaternion_to_euler(quaternion), 180/3.141593), {180, 180, 180}); 
 
-            //
+            //Update Look At matrix 
+            //matrix_lookat(look_at, position,foward, up, right);
+
             //Position Update
-            //
-            
-            //Updating Position 
-            // position.i += delta_position.i*right.i + delta_position.j*up.i + delta_position.k*foward.i;
-            // position.j += delta_position.i*right.j + delta_position.j*up.j + delta_position.k*foward.j;
-            // position.k += delta_position.i*right.k + delta_position.j*up.k + delta_position.k*foward.k;
             position.i += vector_dot_product(delta_position, right); 
             position.j += vector_dot_product(delta_position, up); 
             position.k += vector_dot_product(delta_position, foward); 
@@ -508,43 +498,45 @@ class object
                 vect voxel_position = vector_add(quaternion_rotation(quaternion, voxs.position), position); //Rotating/Translation the Voxel Position
 
                 //Removing unessecery voxels 
-                //if (vector_dot_product(camera.foward, normal_direction) > -0.35f && vector_dot_product(camera.foward, vector_subtract(camera.position, voxel_position)) > 0.0f)
-                {  
-                    //Basic Lighting 
-                    float dp = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
-
+                if (vector_dot_product(vector_normalize(vector_subtract(camera.position, voxel_position)), normal_direction) > -0.35f)  
+                {
                     //
                     //Moving Into View Space 
                     //
-                    //vect camera_view = matrix_vector_multiplication(voxel_position, camera.look_at);
                     vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
-                    //vect camera_view = matrix_vector_multiplication(vector_subtract(voxel_position, camera.position), camera.look_at);
-
-                    //
-                    //Moving Into Projection Space 
-                    // 
-                    vect result = matrix_vector_multiplication(camera_view, projection);
-                    result = vector_divide(result, result.w);
-
-                    //Storing the Projected Positions and other Voxel Characteristics 
-                    voxel temp; 
-                    temp.position.i = (result.i + 1.0)*screen_width/2; 
-                    temp.position.j = (result.j + 1.0)*screen_height/2; 
-                    temp.position.k = result.k; 
-
-                    //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
-                    temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size; 
-
-                    //only create a object to calculate if in Camera View Space
-                    if (temp.position.i + temp.size > 0 && temp.position.i < screen_width && temp.position.j + temp.size > 0 && temp.position.j < screen_height)
+                    
+                    //This removes Voxels behind the camera (Mirror Realm Rabbit)
+                    if (camera_view.k < 0.0f)
                     {
-                        //Looking Up the Colour from the Structure
-                        temp.colour.r = 255*dp; 
-                        temp.colour.g = 255*dp;
-                        temp.colour.b = 255*dp;   
+                        //Basic Lighting 
+                        float dp = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
+                        
+                        //
+                        //Moving Into Projection Space 
+                        // 
+                        vect result = matrix_vector_multiplication(camera_view, projection);
+                        result = vector_divide(result, result.w);
 
-                        //Stores Each Voxel in Projection space
-                        voxel_projected.push_back(temp);
+                        //Storing the Projected Positions and other Voxel Characteristics 
+                        voxel temp; 
+                        temp.position.i = (result.i + 1.0)*screen_width/2; 
+                        temp.position.j = (result.j + 1.0)*screen_height/2; 
+                        temp.position.k = result.k; 
+
+                        //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
+                        temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size; 
+
+                        //only create a object to calculate if in Camera View Space
+                        if (temp.position.i + temp.size > 0 && temp.position.i < screen_width && temp.position.j + temp.size > 0 && temp.position.j < screen_height)
+                        {
+                            //Looking Up the Colour from the Structure
+                            temp.colour.r = 255*dp; 
+                            temp.colour.g = 255*dp;
+                            temp.colour.b = 255*dp;   
+
+                            //Stores Each Voxel in Projection space
+                            voxel_projected.push_back(temp);
+                        };
                     };
                 }; 
             }; 
@@ -895,7 +887,7 @@ int main(int argc, char *argv[])
         write_to_screen(renderer, character_textures, positions, 5.0f, screen_height - 100);
 
         //Write Angles 
-        std::string angles = "aX:" + std::to_string(camera.euler.i) + " aY:" + std::to_string(camera.euler.j) + " aZ:" + std::to_string(camera.euler.k);
+        std::string angles = "aX:" + std::to_string(camera.foward.i) + " aY:" + std::to_string(camera.foward.j) + " aZ:" + std::to_string(camera.foward.k);
         write_to_screen(renderer, character_textures, angles, 5.0f, screen_height - 50);        
 
         //
