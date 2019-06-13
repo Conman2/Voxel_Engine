@@ -30,6 +30,9 @@
 //Simplty camera class functions to an intialize, update, close
 //Rotate around an objets center (currently around the edge of the object)
 //Remove LookAt Matrix infastructure (Not being used anymore)
+//Check if anypart of the Object AABB is in camera before cehcking each voxel
+//Camera misbehvaing follows global pitch/yaw instead of global
+//Scale Function (Zoom) by multiplying the diagnonal values of the view matrix by a scale factor (values that would normally be one)
 
 //World State Variables 
 typedef Uint32 colour_format; 
@@ -45,10 +48,10 @@ const int screen_width = 1000;
 const int screen_height = 1000;
 
 //The Universal Origin and Axes 
-const vect world_origin = {0, 0, 0, 0};
-const vect world_right  = {1, 0, 0, 1};
-const vect world_up     = {0, 1, 0, 1};
-const vect world_foward = {0, 0, 1, 1};
+const vect world_origin = {0, 0, 0, 1};
+const vect world_right  = {1, 0, 0, 0};
+const vect world_up     = {0, 1, 0, 0};
+const vect world_foward = {0, 0, 1, 0};
 
 //Defining the mesh of a square
 // static const GLfloat vertex_data[] =
@@ -155,7 +158,7 @@ class camera
         SDL_Texture* movingHUD_texture; 
 
         //Camera data 
-        float view_angle = 270.0f; 
+        float view_angle = 100.0f; 
         float z_max_distance = 10.0f;
         float z_min_distance = 0.1f;
 
@@ -177,6 +180,10 @@ class camera
         //Updates the objects position and angle
         void update(vect delta_angle, vect delta_position)
         {     
+            //
+            //Attitude Update
+            //
+
             //Updating Quaternion Angles (Axis Angle to Quaternion)
             quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward) ;
 
@@ -185,16 +192,23 @@ class camera
             right  = vector_normalize(quaternion_rotation(quaternion, world_right));
             foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
 
-            //Updating Position 
-            position.i += delta_position.i*right.i + delta_position.j*up.i + delta_position.k*foward.i;
-            position.j += delta_position.i*right.j + delta_position.j*up.j + delta_position.k*foward.j;
-            position.k += delta_position.i*right.k + delta_position.j*up.k + delta_position.k*foward.k;
-
-            //Converting Quaternion Angle into Euler (so our puny minds can comprehend whats happening)
-            euler = vector_add(vector_multiply(quaternion_to_euler(quaternion), 180/3.142), {180, 180, 180}); 
-        
             //Update Look At Matrix
             matrix_lookat(look_at, position, foward, up, right);
+
+            //Converting Quaternion Angle into Euler (so our puny minds can comprehend whats happening)
+            euler = vector_add(vector_multiply(quaternion_to_euler(quaternion), 180/3.141593), {180, 180, 180}); 
+
+            //
+            //Position Update
+            //
+            
+            //Updating Position 
+            // position.i += delta_position.i*right.i + delta_position.j*up.i + delta_position.k*foward.i;
+            // position.j += delta_position.i*right.j + delta_position.j*up.j + delta_position.k*foward.j;
+            // position.k += delta_position.i*right.k + delta_position.j*up.k + delta_position.k*foward.k;
+            position.i += vector_dot_product(delta_position, right); 
+            position.j += vector_dot_product(delta_position, up); 
+            position.k += vector_dot_product(delta_position, foward); 
         };
 
         //Sets up projection matrix
@@ -481,30 +495,34 @@ class object
         //Right now this renders this object (But this wont work when rendering multiple objects so will need to update )
         std::vector<voxel> project_voxels(camera camera, float projection[4][4], std::vector<voxel> voxel_projected)
         {
-            //Light Direction 
-            vect light_direction = {0.0f, 1.0f, 1.0f};
-            vector_normalize(light_direction);
+            //Normalized Light Direction 
+            vect light_direction =  vector_normalize({0.0f, 1.0f, 1.0f});
 
             //Loop through the voxels and render the ones you want
-            int i = 0; int j = 0; int k = 0; 
             for (auto voxs: voxels)
             {   
-                //Rotating Normal
-                vect normal_direction = quaternion_rotation(quaternion, voxs.normal);
+                //
+                //Moving into World Space 
+                //
+                vect normal_direction = quaternion_rotation(quaternion, voxs.normal); //Rotating Normal
+                vect voxel_position = vector_add(quaternion_rotation(quaternion, voxs.position), position); //Rotating/Translation the Voxel Position
 
-                //Rotating the voxel
-                vect voxel_position = vector_add(quaternion_rotation(quaternion, voxs.position), position);
-
-                //Should remove voxels with normals facing away from camera
-                //vector_dot_product(camera.foward, vector_subtract(camera.position, voxs.position)) > 0.0f <- This kills the dreaded mirror realm rabbit
-                if (vector_dot_product(camera.foward, normal_direction) > -0.35f && vector_dot_product(camera.foward, vector_subtract(camera.position, voxel_position)) > 0.0f)
+                //Removing unessecery voxels 
+                //if (vector_dot_product(camera.foward, normal_direction) > -0.35f && vector_dot_product(camera.foward, vector_subtract(camera.position, voxel_position)) > 0.0f)
                 {  
+                    //Basic Lighting 
                     float dp = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
 
-                    //Camera Manipulation (LookAt Matrix Was Not Working!)
+                    //
+                    //Moving Into View Space 
+                    //
+                    //vect camera_view = matrix_vector_multiplication(voxel_position, camera.look_at);
                     vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
+                    //vect camera_view = matrix_vector_multiplication(vector_subtract(voxel_position, camera.position), camera.look_at);
 
-                    //Projectring from 3d into 2d then normalizing  
+                    //
+                    //Moving Into Projection Space 
+                    // 
                     vect result = matrix_vector_multiplication(camera_view, projection);
                     result = vector_divide(result, result.w);
 
