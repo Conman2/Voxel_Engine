@@ -1,75 +1,42 @@
-#include "math.h"
-#include "font.h"
+
+//Standard Libaries 
+#include <ctime>
 #include <vector>
 #include <fstream>
 #include <strstream>
 #include <algorithm>
+#include <GL/glew.h>
 #include <SDL2/SDL.h>
-// #include <GL/gl.h>
-// #include <GL/glu.h>
 
-//
-//TODO
-//
-//Add a Z-buffer??? (To replace the painter algorithim) (Through OpenGl) (Maybe painter through opengl))
-//Look Into Vertix Buffing (Instancing actually)
-//Add a refernce plane (so its not a easy to get lost)
-//Look into terrain (what method of rendering? Using voxels same as sprites or using perlin-noise and line voxel thing)
-//Draw less voxels the further away you are (LOD)
-//Make a HUD compass
-//Move font functions into header file 
-//Normalize mesh size (rabbit reall small) also add scaling input to the mesh
-//Fix the voxelization algorithim 
-//Swithch to OpenGL projection and stuff 
-//Make change in angle/position irrelevant to time
-//Flickering voxels when pitch is 0. Maybe add if pitch==0 pitch = 0.01 or something
-//Mess with aspect ratio stuff (voxel size varying with aspect ratio) (Currently limited to square to work propely) (maybe diagonal screen distance)
-//Behind Font Texture is black instead of alpha 
-//Holes open up when the object in corner of screen because you are essentially looking at the non-existant face of the cube (the one parrel with the view vector) To fixe this you must take into account the 3d shape of a voxel
-//Setup shaders to do stuff (projection/lighting)
-//Simplty camera class functions to an intialize, update, close
-//Rotate around an objets center (currently around the edge of the object)
-//Remove LookAt Matrix infastructure (Not being used anymore)
-//Check if anypart of the Object AABB is in camera before cehcking each voxel
-//Camera misbehvaing follows global pitch/yaw instead of global
-//Scale Function (Zoom) by multiplying the diagnonal values of the view matrix by a scale factor (values that would normally be one)
+//Home Made Math Libary
+#include "math.hpp"
 
-//World State Variables 
-typedef Uint32 colour_format; 
-const Uint32 pixel_format_id = SDL_PIXELFORMAT_RGBA32;
+//Global Variables 
+const float voxel_size = 0.005f; //This is world voxel size
+int world_voxel_limit = 50000; //This the limit to voxels rendered at one time (can't seem to go above 50000)
+int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
+int screen_width = 1000;
+int screen_height = 1000;
 
-//This stores all font textures 
-SDL_Texture* character_textures[95];
-
-//Random Constants 
-const int fontsize = 3;
-const float voxel_size = 0.003f; //This is world voxel size 
-const int screen_width = 1000;
-const int screen_height = 1000;
-
-//The Universal Origin and Axes 
 const vect world_origin = {0, 0, 0, 1};
 const vect world_right  = {1, 0, 0, 0};
 const vect world_up     = {0, 1, 0, 0};
 const vect world_foward = {0, 0, 1, 0};
 
-//Defining the mesh of a square
-// static const GLfloat vertex_data[] =
-// {
-//     -0.5f, -0.5f, 0.0f,
-//     0.5f,  -0.5f, 0.0f,
-//     -0.5f, 0.5f,  0.0f,
-//     0.5f,  0.5f,  0.0f,    
-// };
+//Physics Variables 
+float velocity = 1;
+float angular_velocity = 0.6;
 
-//Colour Struct (Default is Solid White)
-struct colr
-{   
-    unsigned char r = 0; 
-    unsigned char g = 0;
-    unsigned char b = 0; 
-    unsigned char a = 255; 
-};
+//Default Variables 
+float left_speed = 0,     yaw_left_speed = 0;
+float right_speed = 0,    yaw_right_speed = 0;
+float down_speed = 0,     pitch_down_speed = 0;
+float up_speed = 0,       pitch_up_speed = 0;
+float foward_speed = 0,   roll_right_speed = 0;
+float backward_speed = 0, roll_left_speed = 0;
+
+//Stores Change in position/angle
+vect delta_position; vect delta_angle;
 
 //Used to store a mesh
 struct mesh
@@ -152,11 +119,6 @@ std::vector<voxel> voxel_projected;
 class camera
 {
     private: 
-        //HUD Information
-        int HUDsize = fontsize; //same as fontsize looks best (consistant pixel size)
-        SDL_Texture* stationaryHUD_texture; 
-        SDL_Texture* movingHUD_texture; 
-
         //Camera data 
         float view_angle = 100.0f; 
         float z_max_distance = 10.0f;
@@ -206,119 +168,6 @@ class camera
         {
             matrix_projection(projection, view_angle, screen_height, screen_width, z_max_distance, z_min_distance);
         };
-
-        //HUD System 
-        void intialize_HUD(SDL_Renderer *renderer, colr colour, SDL_PixelFormat* pixel_format)
-        {   
-            //
-            //Stationary Section 
-            //
-
-            //Defining Texture 
-            bool stationaryHUD[4][216] = 
-            {
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-            };     
-
-            //Creating texture
-            stationaryHUD_texture = SDL_CreateTexture(renderer, pixel_format_id, SDL_TEXTUREACCESS_STREAMING, 216, 4); 
-
-            // Create the texture
-            colour_format texture_data[4*216];
-
-            int counter = 0; 
-            for(int i = 0; i < 4; i++)
-            {   
-                for (int j = 0; j < 216; j++)
-                {
-                    //Assign texture colour
-                    if (stationaryHUD[i][j] == 1) 
-                    {
-                        texture_data[counter] = SDL_MapRGBA(pixel_format, colour.r,  colour.g, colour.b, colour.a); 
-                    }
-                    else
-                    {
-                        texture_data[counter] = SDL_MapRGBA(pixel_format, 0, 0, 0, 0);
-                    }; 
-
-                    //Update Total Positions 
-                    counter++; 
-                };
-            }; 
-
-            //Assign the texture
-            SDL_UpdateTexture(stationaryHUD_texture, NULL, texture_data, sizeof(colour_format)*216);
-            
-            //
-            //Moving Texture Section  
-            //
-            bool movingHUD[4][36] = 
-            {
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                
-            }; 
-
-            // Create the texture
-            colour_format moving_texture_data[4*36*42];
-
-            movingHUD_texture = SDL_CreateTexture(renderer, pixel_format_id, SDL_TEXTUREACCESS_STREAMING, 36*42, 4);
-
-            //For each degree in a compass
-            counter = 0;
-            for(int i = 0; i < 4; i++)
-            {   
-                for (int j = 0; j < 36*42; j++)
-                {
-                    //Assign texture colour
-                    if (movingHUD[i][j%36] == 1) 
-                    {
-                        moving_texture_data[counter] = SDL_MapRGBA(pixel_format, colour.r,  colour.g, colour.b, colour.a); 
-                    }
-                    else
-                    {
-                        moving_texture_data[counter] = SDL_MapRGBA(pixel_format, 0, 0, 0, 0);
-                    };
-
-                    //Update Total Positions 
-                    counter++; 
-                };
-            };                
-            
-            SDL_UpdateTexture(movingHUD_texture, NULL, moving_texture_data, sizeof(colour_format)*36*42);
-        }; 
-        
-        //Draw the HUD 
-        void render_HUD(SDL_Renderer *renderer, int position_x, int position_y )
-        {
-            //Rendering the stationary texture
-            SDL_Rect HUD_position = {position_x - 216*HUDsize/2, position_y, 216*HUDsize, 4*HUDsize}; 
-            SDL_RenderCopy(renderer, stationaryHUD_texture, NULL, &HUD_position);
-
-            //Preperation for the scrolling texture 
-            SDL_Rect HUD_position2 = {position_x - 216*HUDsize/2, position_y - 4*HUDsize, 216*HUDsize, 4*HUDsize}; 
-
-            //Cropping location of scrolling texture
-            int index =  (euler.j/10)*36; 
-            SDL_Rect cropping = {index, 0, 216, 4}; 
-            
-            //Cutting out the desired section of the scrolling texture
-            SDL_Texture* cropped = SDL_CreateTexture(renderer, pixel_format_id, SDL_TEXTUREACCESS_TARGET, cropping.w, cropping.h);          
-            SDL_SetRenderTarget(renderer, cropped);
-            SDL_RenderCopy(renderer, movingHUD_texture, &cropping, NULL);
-            SDL_SetRenderTarget(renderer, NULL);  
-
-            //Rendering the moving texture
-            SDL_RenderCopy(renderer, cropped, NULL, &HUD_position2);
-
-            //Destroy the texture now it has been used
-            SDL_DestroyTexture(cropped); 
-        }; 
 }; 
 
 //Stores Position and Attitude and object file
@@ -504,7 +353,7 @@ class object
                     //Moving Into View Space 
                     //
                     vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
-                    
+
                     //This removes Voxels behind the camera (Mirror Realm Rabbit)
                     if (camera_view.k < 0.0f)
                     {
@@ -519,8 +368,10 @@ class object
 
                         //Storing the Projected Positions and other Voxel Characteristics 
                         voxel temp; 
-                        temp.position.i = (result.i + 1.0)*screen_width/2; 
-                        temp.position.j = (result.j + 1.0)*screen_height/2; 
+
+                        //This is just to test
+                        temp.position.i = result.i; 
+                        temp.position.j = result.j; 
                         temp.position.k = result.k; 
 
                         //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
@@ -530,9 +381,10 @@ class object
                         if (temp.position.i + temp.size > 0 && temp.position.i < screen_width && temp.position.j + temp.size > 0 && temp.position.j < screen_height)
                         {
                             //Looking Up the Colour from the Structure
-                            temp.colour.r = 255*dp; 
-                            temp.colour.g = 255*dp;
-                            temp.colour.b = 255*dp;   
+                            temp.colour.r = dp; 
+                            temp.colour.g = dp;
+                            temp.colour.b = dp;   
+                            temp.colour.a = 1.0; 
 
                             //Stores Each Voxel in Projection space
                             voxel_projected.push_back(temp);
@@ -548,114 +400,113 @@ class object
             });
 
             return voxel_projected;
-        };                                                                                    
+        }; 
+
+        // std::vector<voxel> sorting(std::vector<voxel> voxel_projected)
+        // {
+        //     //Sort using painter algortithim from close to far
+        //     std::sort(voxel_projected.begin(), voxel_projected.end(), [](voxel vox1, voxel vox2)
+        //     {
+        //         return vox1.position.k < vox2.position.k;
+        //     });
+
+        //     return voxel_projected; 
+        // };                                                                               
 }; 
 
-//Writes to screen 
-void write_to_screen(SDL_Renderer* renderer, SDL_Texture** character_textures, std::string string, int position_x, int position_y)
-{  
-    //For each Character in the String
-    for(char& character: string)
-    {   
-        //Calculating layer
-        int index = character - 32; 
+//Shader Functions 
+std::string read_file(std::string file_name)
+{
+    //Open the text file in read mode and transfer the data 
+    std::ifstream file(file_name);   
 
-        SDL_Rect font_position = {position_x, position_y, 5*fontsize, 7*fontsize}; 
-        SDL_RenderCopy(renderer, character_textures[index], NULL, &font_position);
-
-        position_x += (5+1)*fontsize; 
-    };  
+    //Return data  (and convert std::ifstream to std::string)
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 };
 
-//Writes the Charactes to a Surface or Texture 
-void create_character_texture(SDL_Renderer *renderer, int index, const bool character[7][5], colr colour, SDL_PixelFormat* pixel_format)
+static unsigned int compile_shader(std::string file_name, unsigned int shader_type) 
 {
-    //Creating the texture
-    character_textures[index] = SDL_CreateTexture(renderer, pixel_format_id, SDL_TEXTUREACCESS_STREAMING, 5, 7); 
+    //Create the OpenGL Shader
+    unsigned int shader_id = glCreateShader(shader_type); 
 
-    // Create the texture
-    colour_format texture_data[7*5];
+    //Read The Souce File 
+    std::string shader_data = read_file(file_name); 
 
-    int counter = 0; 
-    for(int i = 0; i < 7; i++)
+    //Transfer it into the datatype OpenGL wants 
+    const char* source = shader_data.c_str(); 
+
+    //Link Source code to Shader Id
+    glShaderSource(shader_id, 1, &source, nullptr); 
+
+    //Compile the Shader
+    glCompileShader(shader_id);  
+
+    //Error Checking and Outputting
+    int compile_status; 
+    glGetShaderiv(shader_id, GL_COMPILE_STATUS, &compile_status);
+    if (compile_status == GL_FALSE)
     {   
-        for (int j = 0; j < 5; j++)
-        {
-            //Assign texture colour
-            if (character[i][j] == 1) 
-            {
-                texture_data[counter] = SDL_MapRGBA(pixel_format, colour.r,  colour.g, colour.b, colour.a); 
-            }
-            else
-            {
-                texture_data[counter] = SDL_MapRGBA(pixel_format, 0, 0, 0, 0);
-            }; 
+        //If there is an error print error message
+        int length; 
+        glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &length);
 
-            //Update Total Positions 
-            counter++; 
-        };
-    }; 
+        //Does something wack
+        char* message = (char*)alloca(length* sizeof(char)); 
+        glGetShaderInfoLog(shader_id, length, &length, message); 
+        
+        //Write error message to file
+        std::string error_log = "error_logs/"+file_name+".txt"; 
 
-    //Assign the texture
-    SDL_UpdateTexture(character_textures[index], NULL, texture_data, sizeof(colour_format)*5);
+        //Get time and date of the error message 
+        time_t current_time = time(0); 
+        char* date_time = ctime(&current_time); 
+
+        //Write the error log
+        std::ofstream file;
+        file.open(error_log, std::ofstream::out | std::ofstream::trunc);
+        file << date_time << "/n" << message; 
+
+        //Clean Up 
+        glDeleteShader(shader_id);
+
+        return 0; 
+    };
+
+    //Return the compiled shader
+    return shader_id; 
+};
+
+static unsigned int create_shaders(std::string vertex_shader, std::string fragment_shader)
+{   
+    //Create the Overall Program
+    unsigned int shader_program = glCreateProgram(); 
+
+    //Create and Compile the Shaders 
+    static unsigned int vertex_shader_id = compile_shader(vertex_shader, GL_VERTEX_SHADER); 
+    static unsigned int fragment_shader_id = compile_shader(fragment_shader, GL_FRAGMENT_SHADER); 
+
+    //Link the shader programs 
+    glAttachShader(shader_program, vertex_shader_id);
+    glAttachShader(shader_program, fragment_shader_id);
+    glLinkProgram(shader_program); 
+    glValidateProgram(shader_program);
+
+    //Delete the Unneeded shader data
+    glDeleteShader(vertex_shader_id);
+    glDeleteShader(fragment_shader_id);
+
+    //Return the final program
+    return shader_program; 
 }; 
-
-void initialize_characters(SDL_Renderer *renderer, SDL_PixelFormat* pixel_format, colr colour)
-{
-    //Create all the textures 
-    create_character_texture(renderer, ' ' - 32,  blk, colour, pixel_format); 
-    create_character_texture(renderer, '0' - 32,  zer, colour, pixel_format); 
-    create_character_texture(renderer, '1' - 32,  one, colour, pixel_format); 
-    create_character_texture(renderer, '2' - 32,  two, colour, pixel_format); 
-    create_character_texture(renderer, '3' - 32,  thr, colour, pixel_format); 
-    create_character_texture(renderer, '4' - 32,  fur, colour, pixel_format); 
-    create_character_texture(renderer, '5' - 32,  fiv, colour, pixel_format); 
-    create_character_texture(renderer, '6' - 32,  six, colour, pixel_format); 
-    create_character_texture(renderer, '7' - 32,  sev, colour, pixel_format); 
-    create_character_texture(renderer, '8' - 32,  eig, colour, pixel_format);
-    create_character_texture(renderer, '9' - 32,  nin, colour, pixel_format);
-    create_character_texture(renderer, 'a' - 32,  lca, colour, pixel_format);
-    create_character_texture(renderer, 'Q' - 32,  cpq, colour, pixel_format);
-    create_character_texture(renderer, 'W' - 32,  cpw, colour, pixel_format);
-    create_character_texture(renderer, 'X' - 32,  cpx, colour, pixel_format);
-    create_character_texture(renderer, 'Y' - 32,  cpy, colour, pixel_format);
-    create_character_texture(renderer, 'Z' - 32,  cpz, colour, pixel_format);
-    create_character_texture(renderer, ':' - 32,  col, colour, pixel_format);
-    create_character_texture(renderer, '.' - 32,  stp, colour, pixel_format);
-    create_character_texture(renderer, '-' - 32,  neg, colour, pixel_format);    
-};
 
 //The main function 
 int main(int argc, char *argv[]) 
 {  
-    //
-    //Setting up SDL
-    //
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window*window  = SDL_CreateWindow("Testing", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL);
-    SDL_Renderer*renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_Event window_event;
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+    ///////////////
+    //Asset Setup//
+    ///////////////
 
-    //Defining Pixel Formating 
-    SDL_PixelFormat *pixel_format = SDL_AllocFormat(pixel_format_id);
-
-    //Defining an SDL Rectangle 
-    SDL_Rect rectangle;
-
-    //
-    //Setting up OpenGL
-    //
-    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);	
-    // SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    // SDL_GLContext SDL_GL_CreateContext(window); 
-    //glEnable(GL_DEPTH_TEST);
-
-    // Clear back buffer
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    //Creating the Camera object
+    //This creates a camera for the world 
     camera camera;
     camera.intialize_projection_matrix(); 
 
@@ -663,6 +514,7 @@ int main(int argc, char *argv[])
     object test1; 
     test1.polygon_mesh.load_mesh("meshes/bunny.obj");
     test1.voxelization("rabbit_"); 
+    test1.position = {0.0, 0, 0}; 
 
     object test2;
     test2.polygon_mesh.load_mesh("meshes/bunny.obj");
@@ -672,39 +524,225 @@ int main(int argc, char *argv[])
     object test3;
     test3.polygon_mesh.load_mesh("meshes/bunny.obj");
     test3.voxelization("rabbit_");
-    test3.position = {0, 0, 0.5}; 
+    test3.position = {1.0, 0, 0}; 
 
     object test4;
     test4.polygon_mesh.load_mesh("meshes/bunny.obj");
     test4.voxelization("rabbit_");
-    test4.position = {0.5, 0, 0.5}; 
+    test4.position = {1.5, 0, 0.0}; 
 
-    //Setup font 
-    initialize_characters(renderer, pixel_format, {255, 255, 255, 255}); 
+     object test5; 
+    test5.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test5.voxelization("rabbit_"); 
+    test5.position = {0.0, 0.5, 0}; 
+
+    object test6;
+    test6.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test6.voxelization("rabbit_");
+    test6.position = {0.5, 0.5, 0}; 
+
+    object test7;
+    test7.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test7.voxelization("rabbit_");
+    test7.position = {1.0, 0.5, 0}; 
+
+    object test8;
+    test8.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test8.voxelization("rabbit_");
+    test8.position = {1.5, 0.5, 0.0}; 
+
+    object test9; 
+    test9.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test9.voxelization("rabbit_"); 
+    test9.position = {0.0, 1, 0}; 
+
+    object test10;
+    test10.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test10.voxelization("rabbit_");
+    test10.position = {0.5, 1, 0}; 
+
+    object test11;
+    test11.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test11.voxelization("rabbit_");
+    test11.position = {1.0, 1, 0}; 
+
+    object test12;
+    test12.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test12.voxelization("rabbit_");
+    test12.position = {1.5, 1, 0.0}; 
+
+    object test13; 
+    test13.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test13.voxelization("rabbit_"); 
+    test13.position = {0.0, 1.5, 0}; 
+
+    object test14;
+    test14.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test14.voxelization("rabbit_");
+    test14.position = {0.5, 1.5, 0}; 
+
+    object test15;
+    test15.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test15.voxelization("rabbit_");
+    test15.position = {1.0, 1.5, 0}; 
+
+    object test16;
+    test16.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test16.voxelization("rabbit_");
+    test16.position = {1.5, 1.5, 0.0}; 
+
+    /////////////////////////
+    //Setting up SDL/OpenGL//
+    /////////////////////////
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window = SDL_CreateWindow("OpenGL Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL);  
+    SDL_Event window_event;
+    SDL_GLContext context = SDL_GL_CreateContext(window); 
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetSwapInterval(1);  
+
+    ///////////////////
+    //Setting up GLEW//
+    ///////////////////
+    glewInit(); 
+    //glEnable(GL_DEPTH_TEST); 
+    glClearColor(0.0, 0.0, 0.0, 1.0); 
+    glClear(GL_COLOR_BUFFER_BIT); // | GL_DEPTH_BUFFER_BIT); 
+    SDL_GL_SwapWindow(window); 
+
+    //////////////////////
+    //Setting Up Shaders//
+    //////////////////////
+    static unsigned int shader_program = create_shaders("shaders/vertex.glsl", "shaders/fragment.glsl");
+    glUseProgram(shader_program);
     
-    //Setup HUD 
-    camera.intialize_HUD(renderer, {255, 255, 255, 255}, pixel_format); 
+    //////////////////////////////
+    //Intializing Voxel VBOs VAO//
+    //////////////////////////////
 
-    //Initializing Speeds 
-    float fps[5];  int fps_counter = 0;  float avg_fps; float fps_timer;
-    float left_speed = 0;     float yaw_left_speed = 0;
-    float right_speed = 0;    float yaw_right_speed = 0;
-    float down_speed = 0;     float pitch_down_speed = 0;
-    float up_speed = 0;       float pitch_up_speed = 0;
-    float foward_speed = 0;   float roll_right_speed = 0;
-    float backward_speed = 0; float roll_left_speed = 0;
+    //This stores the vertex data for the mesh 
+    const GLfloat voxel[4][3] =
+    {
+        { -0.5, 0.5,  0.5 },
+        { -0.5, -0.5, 0.5 }, 
+        {  0.5, 0.5,  0.5 }, 
+        { 0.5,  -0.5, 0.5 },
+    };
 
-    //Setting Angular and Translational Velocities
-    float velocity = 1;       float angular_velocity =  0.6;
+    //The adress for the buffer objects 
+    unsigned int VBO[4], VAO[1]; 
+    
+    //Create 4 VBOs and specify the array which stores there adresses
+    glGenBuffers(4, VBO);  
 
-    //Stores Change in position/angle
-    vect delta_position;       vect delta_angle;
+    //Create the VAO
+    glGenVertexArrays(1, VAO); 
+
+    //Bind the VAO as our currently used object 
+    glBindVertexArray(VAO[0]);
+
+    /////////////////////////////////////////
+    //Generate the VBO to store vertex data//
+    /////////////////////////////////////////
+
+    // Bind our first VBO as being the active buffer and storing vertex attributes (coordinates)
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+    
+    // Copy the vertex data from dice to our buffer (4 and 3 are size of mesh array)
+    uint32_t buffer_size =  (4 * 3) * sizeof(GLfloat);
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, voxel, GL_STATIC_DRAW);
+
+    //This tells OpenGL the data layout
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
+
+    //Enable the VBO within the VAO 
+    glEnableVertexAttribArray(0);
+    
+    //////////////////////////////////////////////
+    //Generate the VBO to store translation data//
+    //////////////////////////////////////////////
+
+    //Generate the buffer which will be used to store the translations 
+    vect translations[world_voxel_limit]; 
+
+    // Bind our first VBO as being the active buffer and storing vertex translations
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+    
+    // Copy the vertex data from dice to our buffer 
+    buffer_size =  world_voxel_limit * sizeof(vect);
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, translations, GL_DYNAMIC_DRAW);
+
+    //This tells OpenGL the data layout
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(vect), 0); 
+    
+    //Enable the VBO withing the VAO 
+    glEnableVertexAttribArray(1);
+
+    //Important for instanced rendering 
+    glVertexAttribDivisor(1, 1);
+
+    //////////////////////////////////////////
+    //Generate the VBO to store scaling data//
+    //////////////////////////////////////////
+
+    //Generate the buffer which will be used to store the translations 
+    float scaling[world_voxel_limit]; 
+
+    // Bind our first VBO as being the active buffer and storing vertex translations
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+    
+    // Copy the vertex data from dice to our buffer 
+    buffer_size =  world_voxel_limit * sizeof(float);
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, scaling, GL_DYNAMIC_DRAW);
+
+    //This tells OpenGL the data layout
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(float), 0); 
+    
+    //Enable the VBO withing the VAO 
+    glEnableVertexAttribArray(2);
+
+    //Important for instanced rendering 
+    glVertexAttribDivisor(2, 1);
+
+    /////////////////////////////////////////
+    //Generate the VBO to store colour data//
+    /////////////////////////////////////////
+
+    //Generate the buffer which will be used to store the translations 
+    colr colours[world_voxel_limit];
+
+    // Bind our first VBO as being the active buffer and storing vertex translations
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[3]);
+    
+    // Copy the vertex data from dice to our buffer 
+    buffer_size =  world_voxel_limit * sizeof(colr);
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, colours, GL_DYNAMIC_DRAW);
+
+    //This tells OpenGL the data layout
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(colr), 0); 
+    
+    //Enable the VBO withing the VAO 
+    glEnableVertexAttribArray(3);
+
+    //Important for instanced rendering 
+    glVertexAttribDivisor(3, 1);
+
+    //Unbind the VAO
+    glBindVertexArray(0);
+
+    /////////////
+    //Main Loop//
+    /////////////
 
     //Initializing Game Time 
     float game_time = SDL_GetTicks(); float time_elapsed = 0; 
 
-    //Main Loop
+    //Defining Exit condition
     bool run = 1;  
+
     while (run == 1)
     {
         while (SDL_PollEvent(&window_event)){
@@ -830,85 +868,86 @@ int main(int argc, char *argv[])
         camera.update(delta_angle, delta_position);
 
         //Render and update attitude
-        // test1.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
-        // test2.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
-        // test3.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
-        // test4.update_position_attitude({0.005,0.005,0.005},{0.0,0,0});
         voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
         voxel_projected = test2.project_voxels(camera, camera.projection, voxel_projected);
         voxel_projected = test3.project_voxels(camera, camera.projection, voxel_projected);
         voxel_projected = test4.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test5.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test6.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test7.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test8.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test9.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test10.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test11.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test12.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test13.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test14.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test15.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test16.project_voxels(camera, camera.projection, voxel_projected);
+
+        //voxel_projected = test1.sorting(voxel_projected);
 
         //Render All of the voxels 
+        int counter = 0;
         for(auto voxels : voxel_projected)
         {   
-            //Set Colour  
-            SDL_SetRenderDrawColor(renderer, voxels.colour.r, voxels.colour.g, voxels.colour.b, 255);
-
-            //If the rectangle is larger than a pixel
-            if(voxels.size > 1)
+            if (counter < world_voxel_limit)
             {
-                //Defining the Rectangle 
-                rectangle.x = voxels.position.i; 
-                rectangle.y = voxels.position.j;
-                rectangle.w = voxels.size;
-                rectangle.h = voxels.size;
-
-                //Drawing the Rectangle 
-                SDL_RenderFillRect(renderer, &rectangle);
-            } 
-
-            //Else if the rectangle is smaller than a pixel 
+                translations[counter] = voxels.position;
+                scaling[counter] = voxels.size/screen_width; 
+                colours[counter++] = voxels.colour; 
+            }
             else 
             {
-                SDL_RenderDrawPoint(renderer, voxels.position.i, voxels.position.j);
-            }; 
+                break; 
+            }
         }
 
-        //Clear the stored voxels (otherwise would get infinitely big)
+        //Record how many voxels were used 
+        temp_voxel_limit = counter; 
+
+        //Clear the stored voxels 
         voxel_projected.clear(); 
 
-        //Draw HUD 
-        camera.render_HUD(renderer, screen_width/2, 60.0f);
+        ///////////////
+        //Update Data//
+        ///////////////
 
-        //Averaging FPS
-        fps_counter ++; fps_timer += time_elapsed; 
-        if(fps_timer > 0.2) 
-        {
-            avg_fps = fps_counter/fps_timer; 
-            fps_timer = 0; fps_counter = 0; 
-        }
-        
-        //Writing FPS to screen
-        write_to_screen(renderer, character_textures, std::to_string((int) avg_fps), 5.0f, 5.0f);
+        //Bind the VAO
+        glBindVertexArray(VAO[0]);
 
-        //Write Position
-        std::string positions = "X:" + std::to_string(camera.position.i) + " Y:" + std::to_string(camera.position.j) + " Z:" + std::to_string(camera.position.k);
-        write_to_screen(renderer, character_textures, positions, 5.0f, screen_height - 100);
+        //Update the translation buffer storage
+        glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vect)*temp_voxel_limit, translations); 
 
-        //Write Angles 
-        std::string angles = "aX:" + std::to_string(camera.foward.i) + " aY:" + std::to_string(camera.foward.j) + " aZ:" + std::to_string(camera.foward.k);
-        write_to_screen(renderer, character_textures, angles, 5.0f, screen_height - 50);        
+        //Update the scaling buffer storage
+        glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float)*temp_voxel_limit, scaling); 
 
-        //
-        //OpenGL Rendering
-        //
-        //glClearColor(1.0, 1.0, 1.0, 1.0);
-        //glClear(GL_COLOR_BUFFER_BIT);
-        //SDL_GL_SwapWindow(window);
+        //Update the colour buffer storage
+        glBindBuffer(GL_ARRAY_BUFFER, VBO[3]);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(colr)*temp_voxel_limit, colours); 
 
-        //Render the screen
-        SDL_RenderPresent(renderer); 
+        ///////////////
+        //Render Call//
+        ///////////////
 
-        // Clear the current renderer
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
+        //OpenGL Clear Render
+        glClear(GL_COLOR_BUFFER_BIT); // | GL_DEPTH_BUFFER_BIT);
+
+        //Instanced Array
+        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, temp_voxel_limit);
+
+        //Unbind the VAO
+        glBindVertexArray(0);
+
+        //Swap Rendering Buffers
+        SDL_GL_SwapWindow(window);
     };
-
-    //Destroy and Clode SDL after program finishes
-    SDL_DestroyRenderer(renderer);
+        
+    //Program Cleanup 
+    SDL_GL_DeleteContext(context); 
     SDL_DestroyWindow(window);
-
     SDL_Quit();
 
     return 0;

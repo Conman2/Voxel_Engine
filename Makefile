@@ -19,25 +19,26 @@ ifeq ($(detected_OS),MSYS)
 	# -Wl,-subsystem,windows gets rid of the console window
 	COMPILER_FLAGS += -Ofast -Wl,-subsystem,windows
 	#INCLUDE_PATHS specifies the additional include paths we'll need
-	INCLUDE_PATHS += -IC:\mingw_dev_lib\include\SDL2
+	#INCLUDE_PATHS += -IC:\mingw_dev_lib\include\SDL2
+	#INCLUDE_PATHS += -IC:\mingw_dev_lib\include\GL
 	#LIBRARY_PATHS specifies the additional library paths we'll need
-	LIBRARY_PATHS += -LC:\mingw_dev_lib\lib
+	#LIBRARY_PATHS += -LC:\mingw_dev_lib\lib
 	#LINKER_FLAGS specifies the libraries we're linking against
-	LINKER_FLAGS += -lmingw32 -lSDL2main -lSDL2
+	LINKER_FLAGS += -lmingw32 -lSDL2main -lSDL2 -lOpenGL32 -lglew32
 else ifeq ($(detected_OS),Linux)
-	LINKER_FLAGS += -lSDL2
+	LINKER_FLAGS += -lSDL2 -lOpenGL32 -lglew32 
 else
 	$(error Unsupported OS)
 endif
 
 #OBJS specifies which files to compile as part of the project
-OBJS = Updated_Version.cpp
+OBJS = OpenGL.cpp
 #CC specifies which compiler we're using
 CC = g++
 # Because of richards great code
 COMPILER_FLAGS += -g -fpermissive
 #OBJ_NAME specifies the name of our exectuable
-OBJ_NAME = Updated_Version
+OBJ_NAME = OpenGL
 
 #This is the target that compiles our executable
 all : $(OBJS)

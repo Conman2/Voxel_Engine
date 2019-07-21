@@ -1,5 +1,13 @@
 #include <math.h>
 
+struct colr
+{   
+    float r = 0; 
+    float g = 0;
+    float b = 0; 
+    float a = 255; 
+};
+
 //*******
 //VECTORS
 //*******
@@ -172,42 +180,6 @@ vect quaternion_rotation(quat quaternion, vect position)
 // Angles between Vectors
 vect quaternion_to_euler(quat quaternion)
 {		
-	// vect result; 
-
-	// double sqw = quaternion.w*quaternion.w;
-	// double sqx = quaternion.x*quaternion.x;
-	// double sqy = quaternion.y*quaternion.y;
-	// double sqz = quaternion.z*quaternion.z;
-	// double unit = sqx + sqy + sqz + sqw; // if normalised is one, otherwise is correction factor
-	// double test = quaternion.x*quaternion.y + quaternion.z*quaternion.w;
-
-	// // singularity at north pole
-	// if (test > 0.499*unit) 
-	// {
-	// 	result.j = 2 * atan2(quaternion.x,quaternion.w);
-	// 	result.i = 3.142/2;
-	// 	result.k = 0;
-	// }
-
-	// // singularity at south pole
-	// else if (test < -0.499*unit) 
-	// {
-	// 	result.j = -2 * atan2(quaternion.x,quaternion.w);
-	// 	result.i = -3.142/2;
-	// 	result.k = 0;
-
-	// }
-
-	// //If not then
-	// else 
-	// {
-	// 	result.j = atan2(2*quaternion.y*quaternion.w-2*quaternion.x*quaternion.z , sqx - sqy - sqz + sqw);
-	// 	result.i = asin(2*test/unit);
-	// 	result.k = atan2(2*quaternion.x*quaternion.w-2*quaternion.y*quaternion.z , -sqx + sqy - sqz + sqw);
-	// }
-	
-	// return result; 
-
 	vect euler;
 
 	// if the input quaternion is normalized, this is exactly one. Otherwise, this acts as a correction factor for the quaternion's not-normalizedness
@@ -218,13 +190,13 @@ vect quaternion_to_euler(quat quaternion)
 
 	if (test > 0.4995f * unit) // singularity at north pole
 	{
-		euler.i = 3.14159 / 2;
+		euler.i = 3.141593 / 2;
 		euler.j = 2.0f * atan2(quaternion.y, quaternion.x);
 		euler.k = 0;
 	}
 	else if (test < -0.4995f * unit) // singularity at south pole
 	{
-		euler.i = -3.14159 / 2;
+		euler.i = -3.141593 / 2;
 		euler.j = -2.0f * atan2(quaternion.y, quaternion.x);
 		euler.k = 0;
 	}
@@ -274,7 +246,7 @@ void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_foward,
     // matrix[0][0] = camera_right.i;     matrix[0][1] = camera_right.j;     matrix[0][2] = camera_right.k;     matrix[0][3] = -vector_dot_product(camera_right,     camera_position);
     // matrix[1][0] = camera_up.i;        matrix[1][1] = camera_up.j;        matrix[1][2] = camera_up.k;        matrix[1][3] = -vector_dot_product(camera_up,        camera_position);
     // matrix[2][0] = camera_foward.i;    matrix[2][1] = camera_foward.j;    matrix[2][2] = camera_foward.k;    matrix[2][3] = -vector_dot_product(camera_foward,    camera_position);
-    // matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1;  
+    // matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1;
 
 	//This seems like the correct rotation method
 	matrix[0][0] = camera_right.i;    matrix[0][1] = camera_up.i;    matrix[0][2] = camera_foward.i;    matrix[0][3] = 0;
@@ -289,7 +261,7 @@ void matrix_projection(float matrix[4][4], float camera_view_angle, float screen
 	matrix_clear(matrix); 
 
     //Projection Matrix Set-up
-    float view_angle =    (float) camera_view_angle*(3.14159 / 180);
+    float view_angle =    (float) camera_view_angle*(3.141593 / 180);
     float aspect_ratio =  (float) screen_height/screen_width;
     float z_normalize =   (float) z_max_distance/(z_max_distance - z_min_distance);
     float z_other =       (float) (-z_max_distance * z_min_distance)/(z_max_distance - z_min_distance);
