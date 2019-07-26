@@ -9,10 +9,10 @@
 #include <SDL2/SDL.h>
 
 //GLM Libaries
-#include "glm/vec3.hpp" // glm::vec3
-#include "glm/vec4.hpp" // glm::vec4
-#include "glm/mat4x4.hpp" // glm::mat4
-#include "glm/gtc/matrix_transform.hpp" // glm::translate, glm::rotate, glm::scale, glm::perspective
+// #include "glm/vec3.hpp" // glm::vec3
+// #include "glm/vec4.hpp" // glm::vec4
+// #include "glm/mat4x4.hpp" // glm::mat4
+// #include "glm/gtc/matrix_transform.hpp" // glm::translate, glm::rotate, glm::scale, glm::perspective
 
 //
 //TODO
@@ -64,13 +64,13 @@ const vect world_up     = {0, 1, 0, 0};
 const vect world_foward = {0, 0, 1, 0};
 
 //Colour Struct (Default is Solid White)
-struct colr
-{   
-    unsigned char r = 0; 
-    unsigned char g = 0;
-    unsigned char b = 0; 
-    unsigned char a = 255; 
-};
+// struct colr
+// {   
+//     unsigned char r = 0; 
+//     unsigned char g = 0;
+//     unsigned char b = 0; 
+//     unsigned char a = 255; 
+// };
 
 //Used to store a mesh
 struct mesh
@@ -621,93 +621,6 @@ void initialize_characters(SDL_Renderer *renderer, SDL_PixelFormat* pixel_format
     create_character_texture(renderer, '-' - 32,  neg, colour, pixel_format);    
 };
 
-//
-//Shader Functions 
-//
-std::string read_file(std::string file_name)
-{
-    //Open the text file in read mode and transfer the data 
-    std::ifstream file(file_name);   
-
-    //Return data  (and convert std::ifstream to std::string)
-    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-};
-
-static unsigned int compile_shader(std::string file_name, unsigned int shader_type) 
-{
-    //Create the OpenGL Shader
-    unsigned int shader_id = glCreateShader(shader_type); 
-
-    //Read The Souce File 
-    std::string shader_data = read_file(file_name); 
-
-    //Transfer it into the datatype OpenGL wants 
-    const char* source = shader_data.c_str(); 
-
-    //Link Source code to Shader Id
-    glShaderSource(shader_id, 1, &source, nullptr); 
-
-    //Compile the Shader
-    glCompileShader(shader_id);  
-
-    //Error Checking and Outputting
-    int compile_status; 
-    glGetShaderiv(shader_id, GL_COMPILE_STATUS, &compile_status);
-    if (compile_status == GL_FALSE)
-    {   
-        //If there is an error print error message
-        int length; 
-        glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &length);
-
-        //Does something wack
-        char* message = (char*)alloca(length* sizeof(char)); 
-        glGetShaderInfoLog(shader_id, length, &length, message); 
-        
-        //Write error message to file
-        std::string error_log = "error_logs/"+file_name+".txt"; 
-
-        //Get time and date of the error message 
-        time_t current_time = time(0); 
-        char* date_time = ctime(&current_time); 
-
-        //Write the error log
-        std::ofstream file;
-        file.open(error_log, std::ofstream::out | std::ofstream::trunc);
-        file << date_time << "/n" << message; 
-
-        //Clean Up 
-        glDeleteShader(shader_id);
-
-        return 0; 
-    };
-
-    //Return the compiled shader
-    return shader_id; 
-};
-
-static unsigned int create_shaders(std::string vertex_shader, std::string fragment_shader)
-{   
-    //Create the Overall Program
-    unsigned int shader_program = glCreateProgram(); 
-
-    //Create and Compile the Shaders 
-    static unsigned int vertex_shader_id = compile_shader(vertex_shader, GL_VERTEX_SHADER); 
-    static unsigned int fragment_shader_id = compile_shader(fragment_shader, GL_FRAGMENT_SHADER); 
-
-    //Link the shader programs 
-    glAttachShader(shader_program, vertex_shader_id);
-    glAttachShader(shader_program, fragment_shader_id);
-    glLinkProgram(shader_program); 
-    glValidateProgram(shader_program);
-
-    //Delete the Unneeded shader data
-    glDeleteShader(vertex_shader_id);
-    glDeleteShader(fragment_shader_id);
-
-    //Return the final program
-    return shader_program; 
-}; 
-
 //The main function 
 int main(int argc, char *argv[]) 
 {  
@@ -842,10 +755,10 @@ int main(int argc, char *argv[])
     //
     //Shader Setup 
     //
-    std::string vertex_shader_location = "vertex.glsl";
-    std::string fragment_shader_location = "fragment.glsl";
-    static unsigned int shader_program = create_shaders(vertex_shader_location, fragment_shader_location);
-    glUseProgram(shader_program);
+    // std::string vertex_shader_location = "vertex.glsl";
+    // std::string fragment_shader_location = "fragment.glsl";
+    // static unsigned int shader_program = create_shaders(vertex_shader_location, fragment_shader_location);
+    // glUseProgram(shader_program);
     
     //Creating the Camera object
     camera camera;
@@ -1039,27 +952,27 @@ int main(int argc, char *argv[])
         int counter = 0;
         for(auto voxels : voxel_projected)
         {   
-            // //Set Colour  
-            // SDL_SetRenderDrawColor(renderer, voxels.colour.r, voxels.colour.g, voxels.colour.b, 255);
+            //Set Colour  
+            SDL_SetRenderDrawColor(renderer, voxels.colour.r, voxels.colour.g, voxels.colour.b, 255);
 
-            // //If the rectangle is larger than a pixel
-            // if(voxels.size > 1)
-            // {
-            //     //Defining the Rectangle 
-            //     rectangle.x = voxels.position.i; 
-            //     rectangle.y = voxels.position.j;
-            //     rectangle.w = voxels.size;
-            //     rectangle.h = voxels.size;
+            //If the rectangle is larger than a pixel
+            if(voxels.size > 1)
+            {
+                //Defining the Rectangle 
+                rectangle.x = voxels.position.i; 
+                rectangle.y = voxels.position.j;
+                rectangle.w = voxels.size;
+                rectangle.h = voxels.size;
+                
+                //Drawing the Rectangle 
+                SDL_RenderFillRect(renderer, &rectangle);
+            } 
 
-            //     //Drawing the Rectangle 
-            //     //SDL_RenderFillRect(renderer, &rectangle);
-            // } 
-
-            // //Else if the rectangle is smaller than a pixel 
-            // else 
-            // {
-            //     SDL_RenderDrawPoint(renderer, voxels.position.i, voxels.position.j);
-            // }; 
+            //Else if the rectangle is smaller than a pixel 
+            else 
+            {
+                SDL_RenderDrawPoint(renderer, voxels.position.i, voxels.position.j);
+            }; 
 
             if (counter < world_voxel_limit)
             {
@@ -1076,51 +989,51 @@ int main(int argc, char *argv[])
         voxel_projected.clear(); 
 
         //Draw HUD 
-        //camera.render_HUD(renderer, screen_width/2, 60.0f);
+        camera.render_HUD(renderer, screen_width/2, 60.0f);
 
         //Averaging FPS
-        // fps_counter ++; fps_timer += time_elapsed; 
-        // if(fps_timer > 0.2) 
-        // {
-        //     avg_fps = fps_counter/fps_timer; 
-        //     fps_timer = 0; fps_counter = 0; 
-        // }
+        fps_counter ++; fps_timer += time_elapsed; 
+        if(fps_timer > 0.2) 
+        {
+            avg_fps = fps_counter/fps_timer; 
+            fps_timer = 0; fps_counter = 0; 
+        }
         
-        // //Writing FPS to screen
-        // write_to_screen(renderer, character_textures, std::to_string((int) avg_fps), 5.0f, 5.0f);
+        //Writing FPS to screen
+        write_to_screen(renderer, character_textures, std::to_string((int) avg_fps), 5.0f, 5.0f);
 
-        // //Write Position
-        // std::string positions = "X:" + std::to_string(camera.position.i) + " Y:" + std::to_string(camera.position.j) + " Z:" + std::to_string(camera.position.k);
-        // write_to_screen(renderer, character_textures, positions, 5.0f, screen_height - 100);
+        //Write Position
+        std::string positions = "X:" + std::to_string(camera.position.i) + " Y:" + std::to_string(camera.position.j) + " Z:" + std::to_string(camera.position.k);
+        write_to_screen(renderer, character_textures, positions, 5.0f, screen_height - 100);
 
-        // //Write Angles 
-        // std::string angles = "aX:" + std::to_string(camera.foward.i) + " aY:" + std::to_string(camera.foward.j) + " aZ:" + std::to_string(camera.foward.k);
-        // write_to_screen(renderer, character_textures, angles, 5.0f, screen_height - 50);        
+        //Write Angles 
+        std::string angles = "aX:" + std::to_string(camera.foward.i) + " aY:" + std::to_string(camera.foward.j) + " aZ:" + std::to_string(camera.foward.k);
+        write_to_screen(renderer, character_textures, angles, 5.0f, screen_height - 50);        
 
         //Render the screen
-        //SDL_RenderPresent(renderer); 
+        SDL_RenderPresent(renderer); 
 
-        //Update the buffer storage (Maybe try glMapBuffer instead)
-        glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vect)*world_voxel_limit, translations); 
+        // //Update the buffer storage (Maybe try glMapBuffer instead)
+        // glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+        // glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vect)*world_voxel_limit, translations); 
 
-        //Update the buffer storage (Maybe try glMapBuffer instead)
-        glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float)*world_voxel_limit, scaling); 
+        // //Update the buffer storage (Maybe try glMapBuffer instead)
+        // glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+        // glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float)*world_voxel_limit, scaling); 
 
-        //OpenGL Clear Render
-        glClear(GL_COLOR_BUFFER_BIT);
+        // //OpenGL Clear Render
+        // glClear(GL_COLOR_BUFFER_BIT);
 
-        //OpenGL Rendering 
-        //This should become glDrawInstanceArrays
-        glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, world_voxel_limit); 
+        // //OpenGL Rendering 
+        // //This should become glDrawInstanceArrays
+        // glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, world_voxel_limit); 
 
-        //Swap Rendering Buffers
-        SDL_GL_SwapWindow(window);
+        // //Swap Rendering Buffers
+        // SDL_GL_SwapWindow(window);
 
         // Clear the current renderer
-        // SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        // SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
     };
 
     //Destroy and Close SDL after program finishes

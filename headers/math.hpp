@@ -14,52 +14,52 @@ struct colr
 
 struct vect 
 {
-    float i = 0; 
-    float j = 0; 
-    float k = 0;
+    float x = 0; 
+    float y = 0; 
+    float z = 0;
     float w = 1;
 };
 
 //Vector Adding 
 vect vector_add(vect vector1, vect vector2)
 {
-    return {vector1.i + vector2.i, vector1.j + vector2.j, vector1.k + vector2.k, 1};
+    return {vector1.x + vector2.x, vector1.y + vector2.y, vector1.z + vector2.z, 1};
 };
 
 //Vector Subtracting 
 vect vector_subtract(vect vector1, vect vector2)
 {
-    return {vector1.i - vector2.i, vector1.j - vector2.j, vector1.k - vector2.k, 1};
+    return {vector1.x - vector2.x, vector1.y - vector2.y, vector1.z - vector2.z, 1};
 };
 
 //Vector Multiplication with Constant
 vect vector_multiply(vect vector, float constant)
 {
-    return {vector.i * constant, vector.j * constant, vector.k * constant, 1};
+    return {vector.x * constant, vector.y * constant, vector.z * constant, 1};
 };
 
 //Vector divided with constant
 vect vector_divide(vect vector, float constant)
 {
-    return {vector.i / constant, vector.j / constant, vector.k / constant, 1};
+    return {vector.x / constant, vector.y / constant, vector.z / constant, 1};
 };
 
 //Dot Product 
 float vector_dot_product(vect vector1, vect vector2)
 {
-    return {vector1.i * vector2.i + vector1.j * vector2.j + vector1.k * vector2.k}; 
+    return {vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z}; 
 };
 
 //Cross Product
 vect vector_cross_product(vect vector1, vect vector2)
 {   
-    return {vector1.j * vector2.k - vector1.k * vector2.j, vector1.k * vector2.i - vector1.i * vector2.k, vector1.i * vector2.j - vector1.j * vector2.i, 1};
+    return {vector1.y * vector2.z - vector1.z * vector2.y, vector1.z * vector2.x - vector1.x * vector2.z, vector1.x * vector2.y - vector1.y * vector2.x, 1};
 };
 
 //Magnitude of a vector
 float vector_magnitude(vect vector)
 {
-	return pow(pow(vector.i, 2) + pow(vector.j, 2) + pow(vector.k, 2), 0.5);
+	return pow(pow(vector.x, 2) + pow(vector.y, 2) + pow(vector.z, 2), 0.5);
 };
 
 //Normalization
@@ -111,9 +111,9 @@ quat quaternion_structure(vect axis, float angle)
 {   
     quat quaternion;
 
-    quaternion.x = axis.i * sinf( angle/2 );
-    quaternion.y = axis.j * sinf( angle/2 );
-    quaternion.z = axis.k * sinf( angle/2 );
+    quaternion.x = axis.x * sinf( angle/2 );
+    quaternion.y = axis.y * sinf( angle/2 );
+    quaternion.z = axis.z * sinf( angle/2 );
     quaternion.w = cosf( angle/2 );
 
     quaternion_normalize(quaternion);
@@ -124,9 +124,9 @@ quat quaternion_structure(vect axis, float angle)
 //Seting up the new global rotation based on input axis, change in angles and total quaternion
 quat quaternion_setup(quat total_quaternion, vect angle, vect x_axis, vect y_axis, vect z_axis)
 {   
-    quat quaternion_x = quaternion_structure(x_axis, angle.i);
-    quat quaternion_y = quaternion_structure(y_axis, angle.j);
-    quat quaternion_z = quaternion_structure(z_axis, angle.k);
+    quat quaternion_x = quaternion_structure(x_axis, angle.x);
+    quat quaternion_y = quaternion_structure(y_axis, angle.y);
+    quat quaternion_z = quaternion_structure(z_axis, angle.z);
 
     //Multiplying change in quaternion by universal quaternion then rotating point
     quat quaternion = quaternion_multiply(quaternion_multiply(quaternion_multiply(quaternion_z, quaternion_y), quaternion_x), total_quaternion);
@@ -148,7 +148,6 @@ quat quaternion_setup(quat total_quaternion, vect angle, vect x_axis, vect y_axi
     result[2] = cosX * sinY * cosZ + sinX * cosY * sinZ;
     result[3] = cosX * cosY * sinZ + sinX * sinY * cosZ;
     */
-
 };
 
 //Provides the conjugate of a quaternion
@@ -160,7 +159,7 @@ quat quaternion_conjugatation(quat quaternion)
 //Converting a Vector into a quaternion to match Data Types 
 quat quaternion_from_vector(vect vector)
 {
-    return{vector.i, vector.j, vector.k, vector.w};
+    return{vector.x, vector.y, vector.z, vector.w};
 };
 
 //Converting a Vector into a quaternion to match Data Types 
@@ -172,9 +171,12 @@ vect vector_from_quaternion(quat quaternion)
 //Rotates a point or vector based on: R = P*Q*P^-1
 vect quaternion_rotation(quat quaternion, vect position)
 {   
-    quat conjugate = quaternion_conjugatation(quaternion);
-
-    return(vector_from_quaternion(quaternion_multiply(quaternion_multiply(quaternion, quaternion_from_vector(position)), conjugate)));
+	//Perphaps more efficient to use: return v' = v + 2.0 * cross(cross(v, q.xyz) + q.w * v, q.xyz);;
+    // quat conjugate = quaternion_conjugatation(quaternion);
+    // return(vector_from_quaternion(quaternion_multiply(quaternion_multiply(quaternion, quaternion_from_vector(position)), conjugate)));
+	
+	vect quat_vect = vector_from_quaternion(quaternion); 
+	return vector_add(position, vector_multiply(vector_cross_product(vector_add(vector_cross_product(position, quat_vect), vector_multiply(position, quaternion.w)), quat_vect), 2));
 }; 
 
 // Angles between Vectors
@@ -190,21 +192,21 @@ vect quaternion_to_euler(quat quaternion)
 
 	if (test > 0.4995f * unit) // singularity at north pole
 	{
-		euler.i = 3.141593 / 2;
-		euler.j = 2.0f * atan2(quaternion.y, quaternion.x);
-		euler.k = 0;
+		euler.x = 3.141593 / 2;
+		euler.y = 2.0f * atan2(quaternion.y, quaternion.x);
+		euler.z = 0;
 	}
 	else if (test < -0.4995f * unit) // singularity at south pole
 	{
-		euler.i = -3.141593 / 2;
-		euler.j = -2.0f * atan2(quaternion.y, quaternion.x);
-		euler.k = 0;
+		euler.x = -3.141593 / 2;
+		euler.y = -2.0f * atan2(quaternion.y, quaternion.x);
+		euler.z = 0;
 	}
 	else // no singularity - this is the majority of cases
 	{
-		euler.i = asin(2.0f * (quaternion.w * quaternion.x - quaternion.y * quaternion.z));
-		euler.j = atan2(2.0f * quaternion.w * quaternion.y + 2.0f * quaternion.z * quaternion.x, 1 - 2.0f * (quaternion.x * quaternion.x + quaternion.y * quaternion.y));
-		euler.k = atan2(2.0f * quaternion.w * quaternion.z + 2.0f * quaternion.x * quaternion.y, 1 - 2.0f * (quaternion.z * quaternion.z + quaternion.x * quaternion.x));
+		euler.x = asin(2.0f * (quaternion.w * quaternion.x - quaternion.y * quaternion.z));
+		euler.y = atan2(2.0f * quaternion.w * quaternion.y + 2.0f * quaternion.z * quaternion.x, 1 - 2.0f * (quaternion.x * quaternion.x + quaternion.y * quaternion.y));
+		euler.z = atan2(2.0f * quaternion.w * quaternion.z + 2.0f * quaternion.x * quaternion.y, 1 - 2.0f * (quaternion.z * quaternion.z + quaternion.x * quaternion.x));
 	}
 
 	return euler;
@@ -231,10 +233,10 @@ vect matrix_vector_multiplication(vect vector, float matrix[4][4])
 {   
     vect result;
 
-    result.i = vector.i* matrix[0][0] + vector.j * matrix[0][1] + vector.k * matrix[0][2] + vector.w * matrix[0][3];
-    result.j = vector.i* matrix[1][0] + vector.j * matrix[1][1] + vector.k * matrix[1][2] + vector.w * matrix[1][3];
-    result.k = vector.i* matrix[2][0] + vector.j * matrix[2][1] + vector.k * matrix[2][2] + vector.w * matrix[2][3];
-    result.w = vector.i* matrix[3][0] + vector.j * matrix[3][1] + vector.k * matrix[3][2] + vector.w * matrix[3][3];
+    result.x = vector.x* matrix[0][0] + vector.y * matrix[0][1] + vector.z * matrix[0][2] + vector.w * matrix[0][3];
+    result.y = vector.x* matrix[1][0] + vector.y * matrix[1][1] + vector.z * matrix[1][2] + vector.w * matrix[1][3];
+    result.z = vector.x* matrix[2][0] + vector.y * matrix[2][1] + vector.z * matrix[2][2] + vector.w * matrix[2][3];
+    result.w = vector.x* matrix[3][0] + vector.y * matrix[3][1] + vector.z * matrix[3][2] + vector.w * matrix[3][3];
 
     return result;
 };
@@ -243,15 +245,15 @@ vect matrix_vector_multiplication(vect vector, float matrix[4][4])
 void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_foward, vect camera_up, vect camera_right)
 {
     //Look At Matrix 
-    // matrix[0][0] = camera_right.i;     matrix[0][1] = camera_right.j;     matrix[0][2] = camera_right.k;     matrix[0][3] = -vector_dot_product(camera_right,     camera_position);
-    // matrix[1][0] = camera_up.i;        matrix[1][1] = camera_up.j;        matrix[1][2] = camera_up.k;        matrix[1][3] = -vector_dot_product(camera_up,        camera_position);
-    // matrix[2][0] = camera_foward.i;    matrix[2][1] = camera_foward.j;    matrix[2][2] = camera_foward.k;    matrix[2][3] = -vector_dot_product(camera_foward,    camera_position);
+    // matrix[0][0] = camera_right.x;     matrix[0][1] = camera_right.y;     matrix[0][2] = camera_right.z;     matrix[0][3] = -vector_dot_product(camera_right,     camera_position);
+    // matrix[1][0] = camera_up.x;        matrix[1][1] = camera_up.y;        matrix[1][2] = camera_up.z;        matrix[1][3] = -vector_dot_product(camera_up,        camera_position);
+    // matrix[2][0] = camera_foward.x;    matrix[2][1] = camera_foward.y;    matrix[2][2] = camera_foward.z;    matrix[2][3] = -vector_dot_product(camera_foward,    camera_position);
     // matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1;
 
 	//This seems like the correct rotation method
-	matrix[0][0] = camera_right.i;    matrix[0][1] = camera_up.i;    matrix[0][2] = camera_foward.i;    matrix[0][3] = 0;
-    matrix[1][0] = camera_right.j;    matrix[1][1] = camera_up.j;    matrix[1][2] = camera_foward.j;    matrix[1][3] = 0;
-    matrix[2][0] = camera_right.k;    matrix[2][1] = camera_up.k;    matrix[2][2] = camera_foward.k;    matrix[2][3] = 0;
+	matrix[0][0] = camera_right.x;    matrix[0][1] = camera_up.x;    matrix[0][2] = camera_foward.x;    matrix[0][3] = 0;
+    matrix[1][0] = camera_right.y;    matrix[1][1] = camera_up.y;    matrix[1][2] = camera_foward.y;    matrix[1][3] = 0;
+    matrix[2][0] = camera_right.z;    matrix[2][1] = camera_up.z;    matrix[2][2] = camera_foward.z;    matrix[2][3] = 0;
     matrix[3][0] = 0;                 matrix[3][1] = 0;              matrix[3][2] = 0;                  matrix[3][3] = 1;  
 };
 
@@ -301,31 +303,31 @@ inline bool planeBoxOverlap(vect normal, vect vert, vect maxbox)
 	vect vmin, vmax;
 	float v;
 
-    v = vert.i;
-    if (normal.i > 0.0f) {
-        vmin.i = -maxbox.i - v;
-        vmax.i = maxbox.i - v;
+    v = vert.x;
+    if (normal.x > 0.0f) {
+        vmin.x = -maxbox.x - v;
+        vmax.x = maxbox.x - v;
     } else {
-        vmin.i = maxbox.i - v;
-        vmax.i = -maxbox.i - v;
+        vmin.x = maxbox.x - v;
+        vmax.x = -maxbox.x - v;
     }
 
-    v = vert.j;
-    if (normal.j > 0.0f) {
-        vmin.j = -maxbox.j - v;
-        vmax.j = maxbox.j - v;
+    v = vert.y;
+    if (normal.y > 0.0f) {
+        vmin.y = -maxbox.y - v;
+        vmax.y = maxbox.y - v;
     } else {
-        vmin.j = maxbox.j - v;
-        vmax.j = -maxbox.j - v;
+        vmin.y = maxbox.y - v;
+        vmax.y = -maxbox.y - v;
     }
 
-    v = vert.k;
-    if (normal.k > 0.0f) {
-        vmin.k = -maxbox.k - v;
-        vmax.k = maxbox.k - v;
+    v = vert.z;
+    if (normal.z > 0.0f) {
+        vmin.z = -maxbox.z - v;
+        vmax.z = maxbox.z - v;
     } else {
-        vmin.k = maxbox.k - v;
-        vmax.k = -maxbox.k - v;
+        vmin.z = maxbox.z - v;
+        vmax.z = -maxbox.z - v;
     }
 	
 	if (vector_dot_product(normal, vmin) > 0.0f)
@@ -340,8 +342,8 @@ inline bool planeBoxOverlap(vect normal, vect vert, vect maxbox)
 
 inline bool axisTestX01(float a, float b, float fa, float fb, const vect &v0, const vect &v2, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p2) 
 {
-	p0 = a * v0.j - b * v0.k;
-	p2 = a * v2.j - b * v2.k;
+	p0 = a * v0.y - b * v0.z;
+	p2 = a * v2.y - b * v2.z;
 	if (p0 < p2) {
 		min = p0;
 		max = p2;
@@ -349,15 +351,15 @@ inline bool axisTestX01(float a, float b, float fa, float fb, const vect &v0, co
 		min = p2;
 		max = p0;
 	}
-	rad = fa * boxhalfsize.j + fb * boxhalfsize.k;
+	rad = fa * boxhalfsize.y + fb * boxhalfsize.z;
 	if (min > rad || max < -rad)
 		return false;
 	return true;
 }
 inline bool axisTestX2(float a, float b, float fa, float fb, const vect &v0, const vect &v1, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p1) 
 {
-	p0 = a * v0.j - b * v0.k;
-	p1 = a * v1.j - b * v1.k;
+	p0 = a * v0.y - b * v0.z;
+	p1 = a * v1.y - b * v1.z;
 	if (p0 < p1) {
 		min = p0;
 		max = p1;
@@ -365,7 +367,7 @@ inline bool axisTestX2(float a, float b, float fa, float fb, const vect &v0, con
 		min = p1;
 		max = p0;
 	}
-	rad = fa * boxhalfsize.j + fb * boxhalfsize.k;
+	rad = fa * boxhalfsize.y + fb * boxhalfsize.z;
 	if (min > rad || max < -rad)
 		return false;
 	return true;
@@ -375,8 +377,8 @@ inline bool axisTestX2(float a, float b, float fa, float fb, const vect &v0, con
 
 inline bool axisTestY02(float a, float b, float fa, float fb, const vect &v0, const vect &v2, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p2) 
 {
-	p0 = -a * v0.i + b * v0.k;
-	p2 = -a * v2.i + b * v2.k;
+	p0 = -a * v0.x + b * v0.z;
+	p2 = -a * v2.x + b * v2.z;
 	if (p0 < p2) {
 		min = p0;
 		max = p2;
@@ -384,7 +386,7 @@ inline bool axisTestY02(float a, float b, float fa, float fb, const vect &v0, co
 		min = p2;
 		max = p0;
 	}
-	rad = fa * boxhalfsize.i + fb * boxhalfsize.k;
+	rad = fa * boxhalfsize.x + fb * boxhalfsize.z;
 	if (min > rad || max < -rad)
 		return false;
 	return true;
@@ -392,8 +394,8 @@ inline bool axisTestY02(float a, float b, float fa, float fb, const vect &v0, co
 
 inline bool axisTestY1(float a, float b, float fa, float fb, const vect &v0, const vect &v1, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p1) 
 {
-	p0 = -a * v0.i + b * v0.k;
-	p1 = -a * v1.i + b * v1.k;
+	p0 = -a * v0.x + b * v0.z;
+	p1 = -a * v1.x + b * v1.z;
 	if (p0 < p1) {
 		min = p0;
 		max = p1;
@@ -401,7 +403,7 @@ inline bool axisTestY1(float a, float b, float fa, float fb, const vect &v0, con
 		min = p1;
 		max = p0;
 	}
-	rad = fa * boxhalfsize.i + fb * boxhalfsize.k;
+	rad = fa * boxhalfsize.x + fb * boxhalfsize.z;
 	if (min > rad || max < -rad)
 		return false;
 	return true;
@@ -410,8 +412,8 @@ inline bool axisTestY1(float a, float b, float fa, float fb, const vect &v0, con
 /*======================== Z-tests ========================*/
 inline bool axisTestZ12(float a, float b, float fa, float fb, const vect &v1, const vect &v2, const vect &boxhalfsize, float &rad, float &min, float &max, float &p1, float &p2) 
 {
-	p1 = a * v1.i - b * v1.j;
-	p2 = a * v2.i - b * v2.j;
+	p1 = a * v1.x - b * v1.y;
+	p2 = a * v2.x - b * v2.y;
 	if (p1 < p2) {
 		min = p1;
 		max = p2;
@@ -419,7 +421,7 @@ inline bool axisTestZ12(float a, float b, float fa, float fb, const vect &v1, co
 		min = p2;
 		max = p1;
 	}
-	rad = fa * boxhalfsize.i + fb * boxhalfsize.j;
+	rad = fa * boxhalfsize.x + fb * boxhalfsize.y;
 	if (min > rad || max < -rad)
 		return false;
 	return true;
@@ -427,8 +429,8 @@ inline bool axisTestZ12(float a, float b, float fa, float fb, const vect &v1, co
 
 inline bool axisTestZ0(float a, float b, float fa, float fb, const vect &v0, const vect &v1, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p1) 
 {
-	p0 = a * v0.i - b * v0.j;
-	p1 = a * v1.i - b * v1.j;
+	p0 = a * v0.x - b * v0.y;
+	p1 = a * v1.x - b * v1.y;
 	if (p0 < p1) {
 		min = p0;
 		max = p1;
@@ -436,7 +438,7 @@ inline bool axisTestZ0(float a, float b, float fa, float fb, const vect &v0, con
 		min = p1;
 		max = p0;
 	}
-	rad = fa * boxhalfsize.i + fb * boxhalfsize.j;
+	rad = fa * boxhalfsize.x + fb * boxhalfsize.y;
 	if (min > rad || max < -rad)
 		return false;
 	return true;
@@ -455,48 +457,48 @@ bool voxel_mesh_intersection(vect boxcenter, vect boxhalfsize, vect tv0, vect tv
 	e1 = vector_subtract(v2, v1);
 	e2 = vector_subtract(v2, v1);
 
-	fex = fabsf(e0.i);
-	fey = fabsf(e0.j);
-	fez = fabsf(e0.k);
+	fex = fabsf(e0.x);
+	fey = fabsf(e0.y);
+	fez = fabsf(e0.z);
 
-	if (!axisTestX01(e0.k, e0.j, fez, fey, v0, v2, boxhalfsize, rad, min, max, p0, p2))
+	if (!axisTestX01(e0.z, e0.y, fez, fey, v0, v2, boxhalfsize, rad, min, max, p0, p2))
 		return 0;
-	if (!axisTestY02(e0.k, e0.i, fez, fex, v0, v2, boxhalfsize, rad, min, max, p0, p2))
+	if (!axisTestY02(e0.z, e0.x, fez, fex, v0, v2, boxhalfsize, rad, min, max, p0, p2))
 		return 0;
-	if (!axisTestZ12(e0.j, e0.i, fey, fex, v1, v2, boxhalfsize, rad, min, max, p1, p2))
-		return 0;
-
-	fex = fabsf(e1.i);
-	fey = fabsf(e1.j);
-	fez = fabsf(e1.k);
-
-	if (!axisTestX01(e1.k, e1.j, fez, fey, v0, v2, boxhalfsize, rad, min, max, p0, p2))
-		return 0;
-	if (!axisTestY02(e1.k, e1.i, fez, fex, v0, v2, boxhalfsize, rad, min, max, p0, p2))
-		return 0;
-	if (!axisTestZ0(e1.j, e1.i, fey, fex, v0, v1, boxhalfsize, rad, min, max, p0, p1))
+	if (!axisTestZ12(e0.y, e0.x, fey, fex, v1, v2, boxhalfsize, rad, min, max, p1, p2))
 		return 0;
 
-	fex = fabsf(e2.i);
-	fey = fabsf(e2.j);
-	fez = fabsf(e2.k);
-	if (!axisTestX2(e2.k, e2.j, fez, fey, v0, v1, boxhalfsize, rad, min, max, p0, p1))
+	fex = fabsf(e1.x);
+	fey = fabsf(e1.y);
+	fez = fabsf(e1.z);
+
+	if (!axisTestX01(e1.z, e1.y, fez, fey, v0, v2, boxhalfsize, rad, min, max, p0, p2))
 		return 0;
-	if (!axisTestY1(e2.k, e2.i, fez, fex, v0, v1, boxhalfsize, rad, min, max, p0, p1))
+	if (!axisTestY02(e1.z, e1.x, fez, fex, v0, v2, boxhalfsize, rad, min, max, p0, p2))
 		return 0;
-	if (!axisTestZ12(e2.j, e2.i, fey, fex, v1, v2, boxhalfsize, rad, min, max, p1, p2))
+	if (!axisTestZ0(e1.y, e1.x, fey, fex, v0, v1, boxhalfsize, rad, min, max, p0, p1))
 		return 0;
 
-	findMinMax(v0.i, v1.i, v2.i, min, max);
-	if (min > boxhalfsize.i || max < -boxhalfsize.i)
+	fex = fabsf(e2.x);
+	fey = fabsf(e2.y);
+	fez = fabsf(e2.z);
+	if (!axisTestX2(e2.z, e2.y, fez, fey, v0, v1, boxhalfsize, rad, min, max, p0, p1))
+		return 0;
+	if (!axisTestY1(e2.z, e2.x, fez, fex, v0, v1, boxhalfsize, rad, min, max, p0, p1))
+		return 0;
+	if (!axisTestZ12(e2.y, e2.x, fey, fex, v1, v2, boxhalfsize, rad, min, max, p1, p2))
 		return 0;
 
-	findMinMax(v0.j, v1.j, v2.j, min, max);
-	if (min > boxhalfsize.j || max < -boxhalfsize.j)
+	findMinMax(v0.x, v1.x, v2.x, min, max);
+	if (min > boxhalfsize.x || max < -boxhalfsize.x)
 		return 0;
 
-	findMinMax(v0.k, v1.k, v2.k, min, max);
-	if (min > boxhalfsize.k || max < -boxhalfsize.k)
+	findMinMax(v0.y, v1.y, v2.y, min, max);
+	if (min > boxhalfsize.y || max < -boxhalfsize.y)
+		return 0;
+
+	findMinMax(v0.z, v1.z, v2.z, min, max);
+	if (min > boxhalfsize.z || max < -boxhalfsize.z)
 		return 0;
 
 	normal = vector_cross_product(e0, e1);

@@ -17,7 +17,8 @@ ifeq ($(detected_OS),MSYS)
 	#COMPILER_FLAGS specifies the additional compilation options we're using
 	# -w suppresses all warnings
 	# -Wl,-subsystem,windows gets rid of the console window
-	COMPILER_FLAGS += -Ofast -Wl,-subsystem,windows
+	COMPILER_FLAGS += -Ofast
+	#-Wl,-subsystem,windows
 	#INCLUDE_PATHS specifies the additional include paths we'll need
 	#INCLUDE_PATHS += -IC:\mingw_dev_lib\include\SDL2
 	#INCLUDE_PATHS += -IC:\mingw_dev_lib\include\GL

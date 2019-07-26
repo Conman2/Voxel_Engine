@@ -8,24 +8,30 @@
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 
-//Home Made Math Libary
-#include "math.hpp"
+//Home Made Libaries
+#include "headers/math.hpp"
+#include "headers/font.hpp"
 
 //Global Variables 
-const float voxel_size = 0.005f; //This is world voxel size
-int world_voxel_limit = 50000; //This the limit to voxels rendered at one time (can't seem to go above 50000)
+const float voxel_size = 0.003f; //This is world voxel size
+const int world_voxel_limit = 150000; //This the limit to voxels rendered at one time
 int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
-int screen_width = 1000;
-int screen_height = 1000;
+const int screen_width = 1000;
+const int screen_height = 1000;
 
+//World Space Defintions 
 const vect world_origin = {0, 0, 0, 1};
 const vect world_right  = {1, 0, 0, 0};
 const vect world_up     = {0, 1, 0, 0};
 const vect world_foward = {0, 0, 1, 0};
 
+//Font Storage
+int font_size = 3; 
+bool character_array[7][5][95];
+
 //Physics Variables 
-float velocity = 1;
-float angular_velocity = 0.6;
+const float velocity = 1;
+const float angular_velocity = 0.6;
 
 //Default Variables 
 float left_speed = 0,     yaw_left_speed = 0;
@@ -36,7 +42,10 @@ float foward_speed = 0,   roll_right_speed = 0;
 float backward_speed = 0, roll_left_speed = 0;
 
 //Stores Change in position/angle
-vect delta_position; vect delta_angle;
+vect delta_position;      vect delta_angle;
+
+//Fps Counter Variable
+float fps[5]; int fps_counter = 0;  int avg_fps; float fps_timer;
 
 //Used to store a mesh
 struct mesh
@@ -78,16 +87,16 @@ struct mesh
 			if (line[0] == 'v')
 			{
 				vect v;
-				s >> junk >> v.i >> v.j >> v.k;
+				s >> junk >> v.x >> v.y >> v.z;
 				verts.push_back(v);
 
                 //Record the largest and smallest vertix for the Axis Aligned Bounding Box
-                if      (v.i > max_x){ max_x = v.i;} 
-                else if (v.i < min_x){ min_x = v.i;}
-                if      (v.j > max_y){ max_y = v.j;} 
-                else if (v.j < min_y){ min_y = v.j;}
-                if      (v.k > max_z){ max_z = v.k;} 
-                else if (v.k < min_z){ min_z = v.k;};
+                if      (v.x > max_x){ max_x = v.x;} 
+                else if (v.x < min_x){ min_x = v.x;}
+                if      (v.y > max_y){ max_y = v.y;} 
+                else if (v.y < min_y){ min_y = v.y;}
+                if      (v.z > max_z){ max_z = v.z;} 
+                else if (v.z < min_z){ min_z = v.z;};
 			}
 
 			if (line[0] == 'f')
@@ -115,12 +124,14 @@ struct voxel
 //This stores all seen voxels 
 std::vector<voxel> voxel_projected;
 
+//
 //Camera Class 
+//
 class camera
 {
     private: 
         //Camera data 
-        float view_angle = 100.0f; 
+        float view_angle = 90.0f; 
         float z_max_distance = 10.0f;
         float z_min_distance = 0.1f;
 
@@ -136,14 +147,12 @@ class camera
         vect foward;
 
         //This objects Look At matrix (if it is a camera)
-        float look_at[4][4];
         float projection[4][4];
 
         //Updates the objects position and angle
         void update(vect delta_angle, vect delta_position)
         {     
             //Attitude Update
-            //Updating Quaternion Angles (Axis Angle to Quaternion)
             quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward) ;
 
             //Updating Objects Local Axis from rotation
@@ -151,16 +160,10 @@ class camera
             right  = vector_normalize(quaternion_rotation(quaternion, world_right));
             foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
 
-            //Converting Quaternion Angle into Euler (so our puny minds can comprehend whats happening)
-            euler = vector_add(vector_multiply(quaternion_to_euler(quaternion), 180/3.141593), {180, 180, 180}); 
-
-            //Update Look At matrix 
-            //matrix_lookat(look_at, position,foward, up, right);
-
             //Position Update
-            position.i += vector_dot_product(delta_position, right); 
-            position.j += vector_dot_product(delta_position, up); 
-            position.k += vector_dot_product(delta_position, foward); 
+            position.x += vector_dot_product(delta_position, right); 
+            position.y += vector_dot_product(delta_position, up); 
+            position.z += vector_dot_product(delta_position, foward); 
         };
 
         //Sets up projection matrix
@@ -170,7 +173,9 @@ class camera
         };
 }; 
 
-//Stores Position and Attitude and object file
+//
+//Object Class
+//
 class object
 {
     private: 
@@ -189,13 +194,6 @@ class object
         //Object Behavior 
         vect position;
         quat quaternion;
-        //vect euler; 
-
-        vect velocity; 
-        vect angular_velocity; 
-
-        vect acceleration;
-        vect angular_acceleration;
 
         //Objects local Axis 
         vect up;
@@ -245,7 +243,7 @@ class object
 
                     if (counter > 5)
                     {
-                        thing >> temporary.colour.r >> temporary.colour.g >> temporary.colour.b >> temporary.colour.a >> temporary.normal.i >> temporary.normal.j >> temporary.normal.k >> temporary.position.i >> temporary.position.j >> temporary.position.k; 
+                        thing >> temporary.colour.r >> temporary.colour.g >> temporary.colour.b >> temporary.colour.a >> temporary.normal.x >> temporary.normal.y >> temporary.normal.z >> temporary.position.x >> temporary.position.y >> temporary.position.z; 
                         
                         voxels.push_back(temporary); 
                     }
@@ -279,19 +277,19 @@ class object
                 file << "//World Voxel Size: \n";
                 file << voxel_size << "\n"; 
                 file << "//Voxel Amount in each direction (x, y, z): \n";
-                file << voxel_volume.i << "\t" << voxel_volume.j << "\t" << voxel_volume.k << "\n"; 
+                file << voxel_volume.x << "\t" << voxel_volume.y << "\t" << voxel_volume.z << "\n"; 
                 file << "//The Voxel Information (First 4 numbers rgba, remaining 3 numbers normal vector): \n";
 
                 //This loop goes through each voxel in the grid 
-                for (int i = 0; i < voxel_volume.i; i++)
+                for (int i = 0; i < voxel_volume.x; i++)
                 {   
                     //Calculating i position
                     float position_i = i*voxel_size; 
-                    for (int j = 0; j < voxel_volume.j; j++)
+                    for (int j = 0; j < voxel_volume.y; j++)
                     {
                         //Calculating j position
                         float position_j = j*voxel_size; 
-                        for (int k = 0; k < voxel_volume.k; k++)
+                        for (int k = 0; k < voxel_volume.z; k++)
                         {   
                             //Finding voxel half size and voxel middle position
                             vect left_corner_position = {position_i, position_j, k*voxel_size};
@@ -303,9 +301,9 @@ class object
                             for(auto poly: polygon_mesh.tris)
                             {   
                                 //calculate the current polygon
-                                vect tri1 = {poly.p[0].i - polygon_mesh.min_x, poly.p[0].j - polygon_mesh.min_y, poly.p[0].k - polygon_mesh.min_z};
-                                vect tri2 = {poly.p[1].i - polygon_mesh.min_x, poly.p[1].j - polygon_mesh.min_y, poly.p[1].k - polygon_mesh.min_z}; 
-                                vect tri3 = {poly.p[2].i - polygon_mesh.min_x, poly.p[2].j - polygon_mesh.min_y, poly.p[2].k - polygon_mesh.min_z};
+                                vect tri1 = {poly.p[0].x - polygon_mesh.min_x, poly.p[0].y - polygon_mesh.min_y, poly.p[0].z - polygon_mesh.min_z};
+                                vect tri2 = {poly.p[1].x - polygon_mesh.min_x, poly.p[1].y - polygon_mesh.min_y, poly.p[1].z - polygon_mesh.min_z}; 
+                                vect tri3 = {poly.p[2].x - polygon_mesh.min_x, poly.p[2].y - polygon_mesh.min_y, poly.p[2].z - polygon_mesh.min_z};
     
                                 //Check for intersection
                                 if (voxel_mesh_intersection(voxel_position, voxel_half_size, tri1, tri2, tri3) == 1){
@@ -317,7 +315,7 @@ class object
                                     new_voxel.normal = vector_normalize(vector_cross_product(vector_subtract(tri2, tri1), vector_subtract(tri3, tri1))); 
 
                                     //Adding the voxel information to the file 
-                                    file << new_voxel.colour.r << "\t" << new_voxel.colour.g << "\t" << new_voxel.colour.b << "\t" << new_voxel.colour.a << "\t" << new_voxel.normal.i << "\t" << new_voxel.normal.j << "\t" << new_voxel.normal.k << "\t" << left_corner_position.i << "\t" << left_corner_position.j << "\t" << left_corner_position.k << "\n"; 
+                                    file << new_voxel.colour.r << "\t" << new_voxel.colour.g << "\t" << new_voxel.colour.b << "\t" << new_voxel.colour.a << "\t" << new_voxel.normal.x << "\t" << new_voxel.normal.y << "\t" << new_voxel.normal.z << "\t" << left_corner_position.x << "\t" << left_corner_position.y << "\t" << left_corner_position.z << "\n"; 
                                     
                                     break; 
                                 };
@@ -355,10 +353,10 @@ class object
                     vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
 
                     //This removes Voxels behind the camera (Mirror Realm Rabbit)
-                    if (camera_view.k < 0.0f)
+                    if (camera_view.z < 0.0f)
                     {
                         //Basic Lighting 
-                        float dp = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
+                        float dot_product = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
                         
                         //
                         //Moving Into Projection Space 
@@ -370,20 +368,20 @@ class object
                         voxel temp; 
 
                         //This is just to test
-                        temp.position.i = result.i; 
-                        temp.position.j = result.j; 
-                        temp.position.k = result.k; 
+                        temp.position.x = result.x; 
+                        temp.position.y = result.y; 
+                        temp.position.z = result.z; 
 
                         //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
                         temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size; 
 
                         //only create a object to calculate if in Camera View Space
-                        if (temp.position.i + temp.size > 0 && temp.position.i < screen_width && temp.position.j + temp.size > 0 && temp.position.j < screen_height)
+                        if (temp.position.x > -1 && temp.position.x < 1 && temp.position.y > -1 && temp.position.y < 1)
                         {
                             //Looking Up the Colour from the Structure
-                            temp.colour.r = dp; 
-                            temp.colour.g = dp;
-                            temp.colour.b = dp;   
+                            temp.colour.r = dot_product; 
+                            temp.colour.g = dot_product;
+                            temp.colour.b = dot_product;   
                             temp.colour.a = 1.0; 
 
                             //Stores Each Voxel in Projection space
@@ -393,28 +391,19 @@ class object
                 }; 
             }; 
             
-            //Sort using painter algortithim from close to far
-            std::sort(voxel_projected.begin(), voxel_projected.end(), [](voxel vox1, voxel vox2)
-            {
-                return vox1.position.k < vox2.position.k;
-            });
+            // //Sort using painter algortithim from close to far
+            // std::sort(voxel_projected.begin(), voxel_projected.end(), [](voxel vox1, voxel vox2)
+            // {
+            //     return vox1.position.z < vox2.position.z;
+            // });
 
             return voxel_projected;
-        }; 
-
-        // std::vector<voxel> sorting(std::vector<voxel> voxel_projected)
-        // {
-        //     //Sort using painter algortithim from close to far
-        //     std::sort(voxel_projected.begin(), voxel_projected.end(), [](voxel vox1, voxel vox2)
-        //     {
-        //         return vox1.position.k < vox2.position.k;
-        //     });
-
-        //     return voxel_projected; 
-        // };                                                                               
+        };                                                                            
 }; 
 
+//
 //Shader Functions 
+//
 std::string read_file(std::string file_name)
 {
     //Open the text file in read mode and transfer the data 
@@ -499,18 +488,101 @@ static unsigned int create_shaders(std::string vertex_shader, std::string fragme
     return shader_program; 
 }; 
 
+//
+//Writing to Screen
+//
+void create_font_array(bool character_array[7][5][95], int index, const bool font_layout[7][5])
+{
+    for (int i = 0; i < 7; i++)
+    {
+        for (int j = 0; j < 5; j++)
+        {
+            character_array[i][j][index] = font_layout[i][j]; 
+        };
+    };
+}; 
+
+void initialize_font(bool character_array[7][5][95])
+{
+    //Create all the textures 
+    create_font_array(character_array, ' ' - 32,  blk); 
+    create_font_array(character_array, '0' - 32,  zer); 
+    create_font_array(character_array, '1' - 32,  one); 
+    create_font_array(character_array, '2' - 32,  two); 
+    create_font_array(character_array, '3' - 32,  thr); 
+    create_font_array(character_array, '4' - 32,  fur); 
+    create_font_array(character_array, '5' - 32,  fiv); 
+    create_font_array(character_array, '6' - 32,  six); 
+    create_font_array(character_array, '7' - 32,  sev); 
+    create_font_array(character_array, '8' - 32,  eig);
+    create_font_array(character_array, '9' - 32,  nin);
+    create_font_array(character_array, 'a' - 32,  lca);
+    create_font_array(character_array, 'Q' - 32,  cpq);
+    create_font_array(character_array, 'W' - 32,  cpw);
+    create_font_array(character_array, 'X' - 32,  cpx);
+    create_font_array(character_array, 'Y' - 32,  cpy);
+    create_font_array(character_array, 'Z' - 32,  cpz);
+    create_font_array(character_array, ':' - 32,  col);
+    create_font_array(character_array, '.' - 32,  stp);
+    create_font_array(character_array, '-' - 32,  neg);    
+};
+
+std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool character_array[7][5][95], std::string message, int position_x, int position_y, float font_size, colr colour)
+{
+    //For each Character in the String
+    for(char& character: message)
+    {   
+        //Selecting Character
+        int index = character - 32; 
+
+        //Add the voxel_projected 
+        for (int i = 0; i < 7; i++)
+        {
+            for (int j = 0; j < 5; j++)
+            {   
+                if (character_array[i][j][index] == 1)
+                {
+                    //Creating the voxel 
+                    voxel temp;
+                    
+                    temp.position.x = position_x/screen_width - 1;
+                    temp.position.y = position_y/screen_height - 1;
+                    temp.position.z = 1;
+                    temp.size = font_size; 
+                    temp.colour = colour; 
+
+                    //Add the voxel to the list 
+                    voxel_projected.push_back(temp); 
+                }; 
+                
+                //Update x position for each letter
+                position_x += (5+1)*font_size; 
+            };
+        };
+    };  
+
+    return voxel_projected; 
+}
+
 //The main function 
 int main(int argc, char *argv[]) 
 {  
+    printf("\nStarting Up Game... \n"); 
+
     ///////////////
     //Asset Setup//
     ///////////////
+
+    //Initialize font 
+    initialize_font(character_array); 
 
     //This creates a camera for the world 
     camera camera;
     camera.intialize_projection_matrix(); 
 
     //This creates and Object asigns a mesh to it and then voxelizes that mesh
+    printf("Creating Game Assets...  \n"); 
+
     object test1; 
     test1.polygon_mesh.load_mesh("meshes/bunny.obj");
     test1.voxelization("rabbit_"); 
@@ -594,28 +666,34 @@ int main(int argc, char *argv[])
     /////////////////////////
     //Setting up SDL/OpenGL//
     /////////////////////////
+    printf("Initializing SDL2 and OpenGL...  \n"); 
+
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window* window = SDL_CreateWindow("OpenGL Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL);  
-    SDL_Event window_event;
-    SDL_GLContext context = SDL_GL_CreateContext(window); 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_Window* window = SDL_CreateWindow("Game Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL);
+    SDL_GLContext context = SDL_GL_CreateContext(window);  
+    SDL_Event window_event; 
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); 
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4); 
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 4); 
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1); 
     SDL_GL_SetSwapInterval(1);  
 
     ///////////////////
     //Setting up GLEW//
     ///////////////////
+    printf("Intializing GLEW...  \n"); 
+
     glewInit(); 
-    //glEnable(GL_DEPTH_TEST); 
+    glEnable(GL_DEPTH_TEST); 
     glClearColor(0.0, 0.0, 0.0, 1.0); 
-    glClear(GL_COLOR_BUFFER_BIT); // | GL_DEPTH_BUFFER_BIT); 
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
     SDL_GL_SwapWindow(window); 
 
     //////////////////////
     //Setting Up Shaders//
     //////////////////////
+    printf("Compiling Shader Programs...  \n"); 
+
     static unsigned int shader_program = create_shaders("shaders/vertex.glsl", "shaders/fragment.glsl");
     glUseProgram(shader_program);
     
@@ -666,14 +744,16 @@ int main(int argc, char *argv[])
     //////////////////////////////////////////////
 
     //Generate the buffer which will be used to store the translations 
-    vect translations[world_voxel_limit]; 
+
+    typedef std::vector<vect> trans;
+    trans translations(world_voxel_limit);
 
     // Bind our first VBO as being the active buffer and storing vertex translations
     glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
     
     // Copy the vertex data from dice to our buffer 
     buffer_size =  world_voxel_limit * sizeof(vect);
-    glBufferData(GL_ARRAY_BUFFER, buffer_size, translations, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, &translations[0], GL_DYNAMIC_DRAW);
 
     //This tells OpenGL the data layout
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(vect), 0); 
@@ -689,14 +769,15 @@ int main(int argc, char *argv[])
     //////////////////////////////////////////
 
     //Generate the buffer which will be used to store the translations 
-    float scaling[world_voxel_limit]; 
+    typedef std::vector<float> scale;
+    scale scaling(world_voxel_limit); 
 
     // Bind our first VBO as being the active buffer and storing vertex translations
     glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
     
     // Copy the vertex data from dice to our buffer 
     buffer_size =  world_voxel_limit * sizeof(float);
-    glBufferData(GL_ARRAY_BUFFER, buffer_size, scaling, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, &scaling[0], GL_DYNAMIC_DRAW);
 
     //This tells OpenGL the data layout
     glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(float), 0); 
@@ -712,14 +793,15 @@ int main(int argc, char *argv[])
     /////////////////////////////////////////
 
     //Generate the buffer which will be used to store the translations 
-    colr colours[world_voxel_limit];
+    typedef std::vector<colr> colour;
+    colour colours(world_voxel_limit);
 
     // Bind our first VBO as being the active buffer and storing vertex translations
     glBindBuffer(GL_ARRAY_BUFFER, VBO[3]);
     
     // Copy the vertex data from dice to our buffer 
     buffer_size =  world_voxel_limit * sizeof(colr);
-    glBufferData(GL_ARRAY_BUFFER, buffer_size, colours, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, &colours[0], GL_DYNAMIC_DRAW);
 
     //This tells OpenGL the data layout
     glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(colr), 0); 
@@ -741,13 +823,18 @@ int main(int argc, char *argv[])
     float game_time = SDL_GetTicks(); float time_elapsed = 0; 
 
     //Defining Exit condition
-    bool run = 1;  
+    printf("Entering Game Loop...  \n"); 
 
+    bool run = 1;  
+    int counter = 0;
     while (run == 1)
     {
+        //SDL Loop Conditions (Key Presses)
         while (SDL_PollEvent(&window_event)){
             switch( window_event.type ){
                 case SDL_QUIT:
+                    printf("Exiting Game...  \n"); 
+
                     run = 0;
                     break;
                     // Look for a keypress
@@ -851,21 +938,36 @@ int main(int argc, char *argv[])
             }
         };
 
+        //Dont run the loop if game is closed
+        if (run != 1){break;}; 
+
         //Updating Time (in seconds)
         time_elapsed = (SDL_GetTicks() - game_time)/1000;
         game_time = SDL_GetTicks();
 
         //Updating Positions and Angles
-        delta_angle.i = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
-        delta_angle.j = (yaw_right_speed - yaw_left_speed)*time_elapsed;
-        delta_angle.k = -(roll_right_speed - roll_left_speed)*time_elapsed;
+        delta_angle.x = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
+        delta_angle.y = (yaw_right_speed - yaw_left_speed)*time_elapsed;
+        delta_angle.z = -(roll_right_speed - roll_left_speed)*time_elapsed;
 
-        delta_position.i = (left_speed - right_speed)*time_elapsed;
-        delta_position.j = -(down_speed - up_speed)*time_elapsed; 
-        delta_position.k = (backward_speed - foward_speed)*time_elapsed;
+        delta_position.x = (left_speed - right_speed)*time_elapsed;
+        delta_position.y = -(down_speed - up_speed)*time_elapsed; 
+        delta_position.z = (backward_speed - foward_speed)*time_elapsed;
     
         //Updating the Camera Object 
         camera.update(delta_angle, delta_position);
+
+        //Write to screen average FPS
+        fps_counter ++; fps_timer += time_elapsed; 
+        if(fps_timer > 0.3) 
+        {
+            avg_fps = (int) fps_counter/fps_timer; 
+            fps_timer = 0; fps_counter = 0; 
+            printf("FPS: %i \n", avg_fps);
+            printf("Voxel Number: %i \n", temp_voxel_limit);
+        }
+        
+       voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_fps), 0.0f, 0.0f, font_size, {1, 1, 1, 1});
 
         //Render and update attitude
         voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
@@ -885,16 +987,15 @@ int main(int argc, char *argv[])
         voxel_projected = test15.project_voxels(camera, camera.projection, voxel_projected);
         voxel_projected = test16.project_voxels(camera, camera.projection, voxel_projected);
 
-        //voxel_projected = test1.sorting(voxel_projected);
-
         //Render All of the voxels 
         int counter = 0;
         for(auto voxels : voxel_projected)
         {   
             if (counter < world_voxel_limit)
             {
-                translations[counter] = voxels.position;
-                scaling[counter] = voxels.size/screen_width; 
+                //Not sure why but that "1/" is needed. Probable becuase it cant be a value larger than 1
+                translations[counter] = (vect) {voxels.position.x, voxels.position.y, 1/voxels.position.z, 1.0};
+                scaling[counter] = voxels.size/screen_width*1.5; 
                 colours[counter++] = voxels.colour; 
             }
             else 
@@ -902,7 +1003,7 @@ int main(int argc, char *argv[])
                 break; 
             }
         }
-
+        
         //Record how many voxels were used 
         temp_voxel_limit = counter; 
 
@@ -918,22 +1019,22 @@ int main(int argc, char *argv[])
 
         //Update the translation buffer storage
         glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vect)*temp_voxel_limit, translations); 
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vect)*temp_voxel_limit, &translations[0]); 
 
         //Update the scaling buffer storage
         glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float)*temp_voxel_limit, scaling); 
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float)*temp_voxel_limit, &scaling[0]); 
 
         //Update the colour buffer storage
         glBindBuffer(GL_ARRAY_BUFFER, VBO[3]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(colr)*temp_voxel_limit, colours); 
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(colr)*temp_voxel_limit, &colours[0]); 
 
         ///////////////
         //Render Call//
         ///////////////
 
         //OpenGL Clear Render
-        glClear(GL_COLOR_BUFFER_BIT); // | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         //Instanced Array
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, temp_voxel_limit);
@@ -943,9 +1044,24 @@ int main(int argc, char *argv[])
 
         //Swap Rendering Buffers
         SDL_GL_SwapWindow(window);
+
+        ///////
+        //FPS//
+        ///////
+        // //Averaging FPS
+        // fps_counter ++; fps_timer += time_elapsed; 
+        // if(fps_timer > 0.2) 
+        // {
+        //     avg_fps = fps_counter/fps_timer; 
+        //     fps_timer = 0; fps_counter = 0; 
+
+        //     printf("%f \n", avg_fps);
+        // };
     };
         
     //Program Cleanup 
+    printf("Deleting Graphics Assets... \n"); 
+
     SDL_GL_DeleteContext(context); 
     SDL_DestroyWindow(window);
     SDL_Quit();
