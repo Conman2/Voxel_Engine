@@ -1,6 +1,7 @@
 
 //Standard Libaries 
 #include <ctime>
+#include <math.h>
 #include <vector>
 #include <fstream>
 #include <strstream>
@@ -11,10 +12,31 @@
 //Home Made Libaries
 #include "headers/math.hpp"
 #include "headers/font.hpp"
+#include "headers/map_generation.hpp"
+
+//
+//TODO
+//
+
+//Add a refernce plane (so its not a easy to get lost)
+//Look into terrain (what method of rendering? Using voxels same as sprites or using perlin-noise and line voxel thing)
+//Draw less voxels the further away you are (LOD)
+//Make a HUD compass
+//Normalize mesh size (rabbit reall small) also add scaling input to the mesh
+//Fix the voxelization algorithim (make more efficent)
+//Mess with aspect ratio stuff (voxel size varying with aspect ratio)
+//Holes open up when the object in corner of screen because you are essentially looking at the non-existant face of the cube (the one parrel with the view vector) To fixe this you must take into account the 3d shape of a voxel
+//Rotate around an objets center (currently around the edge of the object)
+//Check if anypart of the Object AABB is in camera before cehcking each voxel
+//Move all font data into a single matrix (making initializing it easier)
+//Create a Initialize funtion and a cleanup function which handles OpenGl and SDL2 attributes ect.
+//Move the shader programs into a class
+//Data streaming to increase amount of voxels which can be rendered (http://voidptr.io/blog/2016/04/28/ldEngine-Part-1.html)
 
 //Global Variables 
+const int terrain_size = 600; //Currently need to change this value in header file as well cus i am a retard shut up. 
 const float voxel_size = 0.003f; //This is world voxel size
-const int world_voxel_limit = 150000; //This the limit to voxels rendered at one time
+const int world_voxel_limit = 500000; //This the limit to voxels rendered at one time
 int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
 const int screen_width = 1000;
 const int screen_height = 1000;
@@ -26,7 +48,7 @@ const vect world_up     = {0, 1, 0, 0};
 const vect world_foward = {0, 0, 1, 0};
 
 //Font Storage
-int font_size = 3; 
+int font_size = 6; //It seems important that this number isn't odd
 bool character_array[7][5][95];
 
 //Physics Variables 
@@ -329,11 +351,52 @@ class object
             }; 
         };
 
+        //Add terrain voxels
+        void terrain_voxelization(float height_map[terrain_size][terrain_size])
+        {
+            for(int i = 0; i < terrain_size; i++)
+            {
+                for(int j = 0; j < terrain_size; j++)
+                { 
+                    //Create a voxel 
+                    voxel new_voxel; 
+
+                    //Define its Attrabutes
+                    new_voxel.position.x = i*voxel_size; 
+                    new_voxel.position.y = j*voxel_size; 
+                    new_voxel.size = voxel_size; 
+
+                    //Define Voxel, include sea level 
+                    if (height_map[i][j] < 0.45)
+                    {
+                        new_voxel.position.z = 0.45;
+                        new_voxel.colour = {0.0, 0.41176, 0.58039, 1.0};
+                    }
+                    else if (height_map[i][j] < 0.50)  
+                    {
+                        new_voxel.colour = {1.0, 0.662745, 0.372549, 1.0};
+                        new_voxel.position.z = height_map[i][j];
+                    }
+                    else 
+                    {
+                        new_voxel.colour = {0.008, 0.392, 0.251, 1.0};
+                        new_voxel.position.z = height_map[i][j];
+                    };
+
+                    //Calculating Normal
+
+                    //Add voxel to object 
+                    voxels.push_back(new_voxel); 
+
+                };
+            };
+        }; 
+
         //Right now this renders this object (But this wont work when rendering multiple objects so will need to update )
         std::vector<voxel> project_voxels(camera camera, float projection[4][4], std::vector<voxel> voxel_projected)
         {
             //Normalized Light Direction 
-            vect light_direction =  vector_normalize({0.0f, 1.0f, 1.0f});
+            vect light_direction =  vector_normalize({1.0f, 0.0f, 0.0f});
 
             //Loop through the voxels and render the ones you want
             for (auto voxs: voxels)
@@ -357,7 +420,7 @@ class object
                     {
                         //Basic Lighting 
                         float dot_product = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
-                        
+
                         //
                         //Moving Into Projection Space 
                         // 
@@ -373,15 +436,15 @@ class object
                         temp.position.z = result.z; 
 
                         //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
-                        temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size; 
+                        temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size*2; 
 
                         //only create a object to calculate if in Camera View Space
                         if (temp.position.x > -1 && temp.position.x < 1 && temp.position.y > -1 && temp.position.y < 1)
                         {
                             //Looking Up the Colour from the Structure
-                            temp.colour.r = dot_product; 
-                            temp.colour.g = dot_product;
-                            temp.colour.b = dot_product;   
+                            temp.colour.r = voxs.colour.r; // *dot_product; 
+                            temp.colour.g = voxs.colour.g; // *dot_product;
+                            temp.colour.b = voxs.colour.b; // *dot_product;   
                             temp.colour.a = 1.0; 
 
                             //Stores Each Voxel in Projection space
@@ -527,8 +590,12 @@ void initialize_font(bool character_array[7][5][95])
     create_font_array(character_array, '-' - 32,  neg);    
 };
 
-std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool character_array[7][5][95], std::string message, int position_x, int position_y, float font_size, colr colour)
+std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool character_array[7][5][95], std::string message, float position_x, float position_y, float font_size, colr colour)
 {
+    //Moving from screen co-oridinates to OpenGl co-oridinates
+    position_x = position_x - screen_width; 
+    position_y = position_y - screen_height; 
+
     //For each Character in the String
     for(char& character: message)
     {   
@@ -545,20 +612,21 @@ std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool char
                     //Creating the voxel 
                     voxel temp;
                     
-                    temp.position.x = position_x/screen_width - 1;
-                    temp.position.y = position_y/screen_height - 1;
-                    temp.position.z = 1;
+                    //Character Positions
+                    temp.position.x = (position_x + j*font_size)/screen_width; 
+                    temp.position.y = (position_y + i*font_size)/screen_height; 
+                    temp.position.z = 10000; 
                     temp.size = font_size; 
                     temp.colour = colour; 
 
                     //Add the voxel to the list 
                     voxel_projected.push_back(temp); 
                 }; 
-                
-                //Update x position for each letter
-                position_x += (5+1)*font_size; 
             };
         };
+
+        //Update x position for each letter
+        position_x += 6*font_size; 
     };  
 
     return voxel_projected; 
@@ -572,6 +640,12 @@ int main(int argc, char *argv[])
     ///////////////
     //Asset Setup//
     ///////////////
+    
+    //Create Terrrain
+    float height_map[terrain_size][terrain_size];
+    generate_terrain(terrain_size, terrain_size, terrain_size, 3.0, 1, height_map);
+    object terrain; 
+    terrain.terrain_voxelization(height_map);
 
     //Initialize font 
     initialize_font(character_array); 
@@ -662,6 +736,7 @@ int main(int argc, char *argv[])
     test16.polygon_mesh.load_mesh("meshes/bunny.obj");
     test16.voxelization("rabbit_");
     test16.position = {1.5, 1.5, 0.0}; 
+
 
     /////////////////////////
     //Setting up SDL/OpenGL//
@@ -963,29 +1038,33 @@ int main(int argc, char *argv[])
         {
             avg_fps = (int) fps_counter/fps_timer; 
             fps_timer = 0; fps_counter = 0; 
-            printf("FPS: %i \n", avg_fps);
+            //printf("FPS: %i \n", avg_fps);
             printf("Voxel Number: %i \n", temp_voxel_limit);
         }
         
-       voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_fps), 0.0f, 0.0f, font_size, {1, 1, 1, 1});
+        //Write to screen 
+        voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_fps), 10.0f, 10.0f, font_size, {1, 1, 1, 1});
+
+        //Project the terrain voxels 
+        voxel_projected = terrain.project_voxels(camera, camera.projection, voxel_projected); 
 
         //Render and update attitude
-        voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test2.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test3.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test4.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test5.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test6.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test7.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test8.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test9.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test10.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test11.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test12.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test13.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test14.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test15.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test16.project_voxels(camera, camera.projection, voxel_projected);
+        //voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test2.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test3.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test4.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test5.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test6.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test7.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test8.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test9.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test10.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test11.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test12.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test13.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test14.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test15.project_voxels(camera, camera.projection, voxel_projected);
+        // voxel_projected = test16.project_voxels(camera, camera.projection, voxel_projected);
 
         //Render All of the voxels 
         int counter = 0;
@@ -995,7 +1074,7 @@ int main(int argc, char *argv[])
             {
                 //Not sure why but that "1/" is needed. Probable becuase it cant be a value larger than 1
                 translations[counter] = (vect) {voxels.position.x, voxels.position.y, 1/voxels.position.z, 1.0};
-                scaling[counter] = voxels.size/screen_width*1.5; 
+                scaling[counter] = voxels.size/screen_width; 
                 colours[counter++] = voxels.colour; 
             }
             else 
@@ -1044,22 +1123,12 @@ int main(int argc, char *argv[])
 
         //Swap Rendering Buffers
         SDL_GL_SwapWindow(window);
-
-        ///////
-        //FPS//
-        ///////
-        // //Averaging FPS
-        // fps_counter ++; fps_timer += time_elapsed; 
-        // if(fps_timer > 0.2) 
-        // {
-        //     avg_fps = fps_counter/fps_timer; 
-        //     fps_timer = 0; fps_counter = 0; 
-
-        //     printf("%f \n", avg_fps);
-        // };
     };
-        
-    //Program Cleanup 
+    
+    ///////////////////
+    //Program Cleanup//
+    ///////////////////
+
     printf("Deleting Graphics Assets... \n"); 
 
     SDL_GL_DeleteContext(context); 

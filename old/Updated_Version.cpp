@@ -1,5 +1,5 @@
 #include "math.hpp"
-#include "font.h"
+#include "font.hpp"
 #include <ctime>
 #include <vector>
 #include <fstream>
@@ -112,16 +112,16 @@ struct mesh
 			if (line[0] == 'v')
 			{
 				vect v;
-				s >> junk >> v.i >> v.j >> v.k;
+				s >> junk >> v.x >> v.y >> v.z;
 				verts.push_back(v);
 
                 //Record the largest and smallest vertix for the Axis Aligned Bounding Box
-                if      (v.i > max_x){ max_x = v.i;} 
-                else if (v.i < min_x){ min_x = v.i;}
-                if      (v.j > max_y){ max_y = v.j;} 
-                else if (v.j < min_y){ min_y = v.j;}
-                if      (v.k > max_z){ max_z = v.k;} 
-                else if (v.k < min_z){ min_z = v.k;};
+                if      (v.x > max_x){ max_x = v.x;} 
+                else if (v.x < min_x){ min_x = v.x;}
+                if      (v.y > max_y){ max_y = v.y;} 
+                else if (v.y < min_y){ min_y = v.y;}
+                if      (v.z > max_z){ max_z = v.z;} 
+                else if (v.z < min_z){ min_z = v.z;};
 			}
 
 			if (line[0] == 'f')
@@ -197,9 +197,9 @@ class camera
             //matrix_lookat(look_at, position,foward, up, right);
 
             //Position Update
-            position.i += vector_dot_product(delta_position, right); 
-            position.j += vector_dot_product(delta_position, up); 
-            position.k += vector_dot_product(delta_position, foward); 
+            position.x += vector_dot_product(delta_position, right); 
+            position.y += vector_dot_product(delta_position, up); 
+            position.z += vector_dot_product(delta_position, foward); 
         };
 
         //Sets up projection matrix
@@ -299,7 +299,7 @@ class camera
             SDL_Rect HUD_position2 = {position_x - 216*HUDsize/2, position_y - 4*HUDsize, 216*HUDsize, 4*HUDsize}; 
 
             //Cropping location of scrolling texture
-            int index =  (euler.j/10)*36; 
+            int index =  (euler.y/10)*36; 
             SDL_Rect cropping = {index, 0, 216, 4}; 
             
             //Cutting out the desired section of the scrolling texture
@@ -391,7 +391,7 @@ class object
 
                     if (counter > 5)
                     {
-                        thing >> temporary.colour.r >> temporary.colour.g >> temporary.colour.b >> temporary.colour.a >> temporary.normal.i >> temporary.normal.j >> temporary.normal.k >> temporary.position.i >> temporary.position.j >> temporary.position.k; 
+                        thing >> temporary.colour.r >> temporary.colour.g >> temporary.colour.b >> temporary.colour.a >> temporary.normal.x >> temporary.normal.y >> temporary.normal.z >> temporary.position.x >> temporary.position.y >> temporary.position.z; 
                         
                         voxels.push_back(temporary); 
                     }
@@ -425,19 +425,19 @@ class object
                 file << "//World Voxel Size: \n";
                 file << voxel_size << "\n"; 
                 file << "//Voxel Amount in each direction (x, y, z): \n";
-                file << voxel_volume.i << "\t" << voxel_volume.j << "\t" << voxel_volume.k << "\n"; 
+                file << voxel_volume.x << "\t" << voxel_volume.y << "\t" << voxel_volume.z << "\n"; 
                 file << "//The Voxel Information (First 4 numbers rgba, remaining 3 numbers normal vector): \n";
 
                 //This loop goes through each voxel in the grid 
-                for (int i = 0; i < voxel_volume.i; i++)
+                for (int i = 0; i < voxel_volume.x; i++)
                 {   
                     //Calculating i position
                     float position_i = i*voxel_size; 
-                    for (int j = 0; j < voxel_volume.j; j++)
+                    for (int j = 0; j < voxel_volume.y; j++)
                     {
                         //Calculating j position
                         float position_j = j*voxel_size; 
-                        for (int k = 0; k < voxel_volume.k; k++)
+                        for (int k = 0; k < voxel_volume.z; k++)
                         {   
                             //Finding voxel half size and voxel middle position
                             vect left_corner_position = {position_i, position_j, k*voxel_size};
@@ -449,9 +449,9 @@ class object
                             for(auto poly: polygon_mesh.tris)
                             {   
                                 //calculate the current polygon
-                                vect tri1 = {poly.p[0].i - polygon_mesh.min_x, poly.p[0].j - polygon_mesh.min_y, poly.p[0].k - polygon_mesh.min_z};
-                                vect tri2 = {poly.p[1].i - polygon_mesh.min_x, poly.p[1].j - polygon_mesh.min_y, poly.p[1].k - polygon_mesh.min_z}; 
-                                vect tri3 = {poly.p[2].i - polygon_mesh.min_x, poly.p[2].j - polygon_mesh.min_y, poly.p[2].k - polygon_mesh.min_z};
+                                vect tri1 = {poly.p[0].x - polygon_mesh.min_x, poly.p[0].y - polygon_mesh.min_y, poly.p[0].z - polygon_mesh.min_z};
+                                vect tri2 = {poly.p[1].x - polygon_mesh.min_x, poly.p[1].y - polygon_mesh.min_y, poly.p[1].z - polygon_mesh.min_z}; 
+                                vect tri3 = {poly.p[2].x - polygon_mesh.min_x, poly.p[2].y - polygon_mesh.min_y, poly.p[2].z - polygon_mesh.min_z};
     
                                 //Check for intersection
                                 if (voxel_mesh_intersection(voxel_position, voxel_half_size, tri1, tri2, tri3) == 1){
@@ -463,7 +463,7 @@ class object
                                     new_voxel.normal = vector_normalize(vector_cross_product(vector_subtract(tri2, tri1), vector_subtract(tri3, tri1))); 
 
                                     //Adding the voxel information to the file 
-                                    file << new_voxel.colour.r << "\t" << new_voxel.colour.g << "\t" << new_voxel.colour.b << "\t" << new_voxel.colour.a << "\t" << new_voxel.normal.i << "\t" << new_voxel.normal.j << "\t" << new_voxel.normal.k << "\t" << left_corner_position.i << "\t" << left_corner_position.j << "\t" << left_corner_position.k << "\n"; 
+                                    file << new_voxel.colour.r << "\t" << new_voxel.colour.g << "\t" << new_voxel.colour.b << "\t" << new_voxel.colour.a << "\t" << new_voxel.normal.x << "\t" << new_voxel.normal.y << "\t" << new_voxel.normal.z << "\t" << left_corner_position.x << "\t" << left_corner_position.y << "\t" << left_corner_position.z << "\n"; 
                                     
                                     break; 
                                 };
@@ -501,7 +501,7 @@ class object
                     vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
 
                     //This removes Voxels behind the camera (Mirror Realm Rabbit)
-                    if (camera_view.k < 0.0f)
+                    if (camera_view.z < 0.0f)
                     {
                         //Basic Lighting 
                         float dp = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
@@ -514,19 +514,19 @@ class object
 
                         //Storing the Projected Positions and other Voxel Characteristics 
                         voxel temp; 
-                        // temp.position.i = (result.i + 1.0)*screen_width/2; 
-                        // temp.position.j = (result.j + 1.0)*screen_height/2; 
+                        // temp.position.x = (result.x + 1.0)*screen_width/2; 
+                        // temp.position.y = (result.y + 1.0)*screen_height/2; 
 
                         //This is just to test
-                        temp.position.i = result.i; 
-                        temp.position.j = result.j; 
-                        temp.position.k = result.k; 
+                        temp.position.x = result.x; 
+                        temp.position.y = result.y; 
+                        temp.position.z = result.z; 
 
                         //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
                         temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size; 
 
                         //only create a object to calculate if in Camera View Space
-                        if (temp.position.i + temp.size > 0 && temp.position.i < screen_width && temp.position.j + temp.size > 0 && temp.position.j < screen_height)
+                        if (temp.position.x + temp.size > 0 && temp.position.x < screen_width && temp.position.y + temp.size > 0 && temp.position.y < screen_height)
                         {
                             //Looking Up the Colour from the Structure
                             temp.colour.r = 255*dp; 
@@ -543,7 +543,7 @@ class object
             //Sort using painter algortithim from close to far
             std::sort(voxel_projected.begin(), voxel_projected.end(), [](voxel vox1, voxel vox2)
             {
-                return vox1.position.k < vox2.position.k;
+                return vox1.position.z < vox2.position.z;
             });
 
             return voxel_projected;
@@ -927,13 +927,13 @@ int main(int argc, char *argv[])
         game_time = SDL_GetTicks();
 
         //Updating Positions and Angles
-        delta_angle.i = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
-        delta_angle.j = (yaw_right_speed - yaw_left_speed)*time_elapsed;
-        delta_angle.k = -(roll_right_speed - roll_left_speed)*time_elapsed;
+        delta_angle.x = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
+        delta_angle.y = (yaw_right_speed - yaw_left_speed)*time_elapsed;
+        delta_angle.z = -(roll_right_speed - roll_left_speed)*time_elapsed;
 
-        delta_position.i = (left_speed - right_speed)*time_elapsed;
-        delta_position.j = -(down_speed - up_speed)*time_elapsed; 
-        delta_position.k = (backward_speed - foward_speed)*time_elapsed;
+        delta_position.x = (left_speed - right_speed)*time_elapsed;
+        delta_position.y = -(down_speed - up_speed)*time_elapsed; 
+        delta_position.z = (backward_speed - foward_speed)*time_elapsed;
     
         //Updating the Camera Object 
         camera.update(delta_angle, delta_position);
@@ -959,8 +959,8 @@ int main(int argc, char *argv[])
             if(voxels.size > 1)
             {
                 //Defining the Rectangle 
-                rectangle.x = voxels.position.i; 
-                rectangle.y = voxels.position.j;
+                rectangle.x = voxels.position.x; 
+                rectangle.y = voxels.position.y;
                 rectangle.w = voxels.size;
                 rectangle.h = voxels.size;
                 
@@ -971,12 +971,12 @@ int main(int argc, char *argv[])
             //Else if the rectangle is smaller than a pixel 
             else 
             {
-                SDL_RenderDrawPoint(renderer, voxels.position.i, voxels.position.j);
+                SDL_RenderDrawPoint(renderer, voxels.position.x, voxels.position.y);
             }; 
 
             if (counter < world_voxel_limit)
             {
-                translations[counter] = {voxels.position.i, voxels.position.j, 0, 0};
+                translations[counter] = {voxels.position.x, voxels.position.y, 0, 0};
                 scaling[counter++] = voxels.size; 
             }
             else 
@@ -1003,11 +1003,11 @@ int main(int argc, char *argv[])
         write_to_screen(renderer, character_textures, std::to_string((int) avg_fps), 5.0f, 5.0f);
 
         //Write Position
-        std::string positions = "X:" + std::to_string(camera.position.i) + " Y:" + std::to_string(camera.position.j) + " Z:" + std::to_string(camera.position.k);
+        std::string positions = "X:" + std::to_string(camera.position.x) + " Y:" + std::to_string(camera.position.y) + " Z:" + std::to_string(camera.position.z);
         write_to_screen(renderer, character_textures, positions, 5.0f, screen_height - 100);
 
         //Write Angles 
-        std::string angles = "aX:" + std::to_string(camera.foward.i) + " aY:" + std::to_string(camera.foward.j) + " aZ:" + std::to_string(camera.foward.k);
+        std::string angles = "aX:" + std::to_string(camera.foward.x) + " aY:" + std::to_string(camera.foward.y) + " aZ:" + std::to_string(camera.foward.z);
         write_to_screen(renderer, character_textures, angles, 5.0f, screen_height - 50);        
 
         //Render the screen

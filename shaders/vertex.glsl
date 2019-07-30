@@ -11,7 +11,7 @@ out vec4 fColor;
 
 void main()
 {
-    gl_Position = vec4((aPosition.x*aScale + aTranslation.x), (aPosition.y*aScale + aTranslation.y), aTranslation.z, 1.0);
+    gl_Position = vec4((aPosition.x*aScale + aTranslation.x), -(aPosition.y*aScale + aTranslation.y), aTranslation.z, 1.0);
     fColor = aColour;
 }
 
