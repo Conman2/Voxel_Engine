@@ -172,11 +172,11 @@ vect vector_from_quaternion(quat quaternion)
 vect quaternion_rotation(quat quaternion, vect position)
 {   
 	//Perphaps more efficient to use: return v' = v + 2.0 * cross(cross(v, q.xyz) + q.w * v, q.xyz);;
-    // quat conjugate = quaternion_conjugatation(quaternion);
-    // return(vector_from_quaternion(quaternion_multiply(quaternion_multiply(quaternion, quaternion_from_vector(position)), conjugate)));
+    quat conjugate = quaternion_conjugatation(quaternion);
+    return(vector_from_quaternion(quaternion_multiply(quaternion_multiply(quaternion, quaternion_from_vector(position)), conjugate)));
 	
-	vect quat_vect = vector_from_quaternion(quaternion); 
-	return vector_add(position, vector_multiply(vector_cross_product(vector_add(vector_cross_product(position, quat_vect), vector_multiply(position, quaternion.w)), quat_vect), 2));
+	// vect quat_vect = vector_from_quaternion(quaternion); 
+	// return vector_add(position, vector_multiply(vector_cross_product(vector_add(vector_cross_product(position, quat_vect), vector_multiply(position, quaternion.w)), quat_vect), 2));
 }; 
 
 // Angles between Vectors

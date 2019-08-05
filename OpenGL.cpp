@@ -35,7 +35,7 @@
 
 //Global Variables 
 const int terrain_size = 600; //Currently need to change this value in header file as well cus i am a retard shut up. 
-const float voxel_size = 0.003f; //This is world voxel size
+const float voxel_size = 0.05f; //This is world voxel size
 const int world_voxel_limit = 500000; //This the limit to voxels rendered at one time
 int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
 const int screen_width = 1000;
@@ -171,6 +171,12 @@ class camera
         //This objects Look At matrix (if it is a camera)
         float projection[4][4];
 
+        //Sets up projection matrix
+        void intialize_projection_matrix()
+        {
+            matrix_projection(projection, view_angle, screen_height, screen_width, z_max_distance, z_min_distance);
+        };
+        
         //Updates the objects position and angle
         void update(vect delta_angle, vect delta_position)
         {     
@@ -186,12 +192,6 @@ class camera
             position.x += vector_dot_product(delta_position, right); 
             position.y += vector_dot_product(delta_position, up); 
             position.z += vector_dot_product(delta_position, foward); 
-        };
-
-        //Sets up projection matrix
-        void intialize_projection_matrix()
-        {
-            matrix_projection(projection, view_angle, screen_height, screen_width, z_max_distance, z_min_distance);
         };
 }; 
 
@@ -366,24 +366,40 @@ class object
                     new_voxel.position.y = j*voxel_size; 
                     new_voxel.size = voxel_size; 
 
-                    //Define Voxel, include sea level 
+                    //Sea level 
                     if (height_map[i][j] < 0.45)
                     {
                         new_voxel.position.z = 0.45;
                         new_voxel.colour = {0.0, 0.41176, 0.58039, 1.0};
+
+                        new_voxel.normal = {0.0, 0.0, 1.0, 1.0};
                     }
-                    else if (height_map[i][j] < 0.50)  
+
+                    //Sand Dunes 
+                    else if (height_map[i][j] < 0.47)  
                     {
                         new_voxel.colour = {1.0, 0.662745, 0.372549, 1.0};
                         new_voxel.position.z = height_map[i][j];
+
+                        //Calculating Normal
+                        vect point1 = new_voxel.position;
+                        vect point2 = {(i + 1)*voxel_size, j*voxel_size, height_map[i + 1][j], 1};
+                        vect point3 = {i*voxel_size, (j + 1)*voxel_size, height_map[i][j + 1], 1};
+                        new_voxel.normal = vector_normalize(vector_cross_product(vector_subtract(point1, point2), vector_subtract(point1, point3))); 
                     }
+
+                    //Grass
                     else 
                     {
                         new_voxel.colour = {0.008, 0.392, 0.251, 1.0};
                         new_voxel.position.z = height_map[i][j];
-                    };
 
-                    //Calculating Normal
+                        //Calculating Normal
+                        vect point1 = new_voxel.position;
+                        vect point2 = {(i + 1)*voxel_size, j*voxel_size, height_map[i + 1][j], 1};
+                        vect point3 = {i*voxel_size, (j + 1)*voxel_size, height_map[i][j + 1], 1};
+                        new_voxel.normal = vector_normalize(vector_cross_product(vector_subtract(point1, point2), vector_subtract(point1, point3))); 
+                    };
 
                     //Add voxel to object 
                     voxels.push_back(new_voxel); 
@@ -396,7 +412,7 @@ class object
         std::vector<voxel> project_voxels(camera camera, float projection[4][4], std::vector<voxel> voxel_projected)
         {
             //Normalized Light Direction 
-            vect light_direction =  vector_normalize({1.0f, 0.0f, 0.0f});
+            vect light_direction =  vector_normalize({0.0f, 1.0f, 1.0f});
 
             //Loop through the voxels and render the ones you want
             for (auto voxs: voxels)
@@ -442,9 +458,9 @@ class object
                         if (temp.position.x > -1 && temp.position.x < 1 && temp.position.y > -1 && temp.position.y < 1)
                         {
                             //Looking Up the Colour from the Structure
-                            temp.colour.r = voxs.colour.r; // *dot_product; 
-                            temp.colour.g = voxs.colour.g; // *dot_product;
-                            temp.colour.b = voxs.colour.b; // *dot_product;   
+                            temp.colour.r = voxs.colour.r*dot_product; 
+                            temp.colour.g = voxs.colour.g*dot_product;
+                            temp.colour.b = voxs.colour.b*dot_product;   
                             temp.colour.a = 1.0; 
 
                             //Stores Each Voxel in Projection space
@@ -642,6 +658,7 @@ int main(int argc, char *argv[])
     ///////////////
     
     //Create Terrrain
+    printf("Creating Terrain...  \n"); 
     float height_map[terrain_size][terrain_size];
     generate_terrain(terrain_size, terrain_size, terrain_size, 3.0, 1, height_map);
     object terrain; 
@@ -656,87 +673,6 @@ int main(int argc, char *argv[])
 
     //This creates and Object asigns a mesh to it and then voxelizes that mesh
     printf("Creating Game Assets...  \n"); 
-
-    object test1; 
-    test1.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test1.voxelization("rabbit_"); 
-    test1.position = {0.0, 0, 0}; 
-
-    object test2;
-    test2.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test2.voxelization("rabbit_");
-    test2.position = {0.5, 0, 0}; 
-
-    object test3;
-    test3.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test3.voxelization("rabbit_");
-    test3.position = {1.0, 0, 0}; 
-
-    object test4;
-    test4.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test4.voxelization("rabbit_");
-    test4.position = {1.5, 0, 0.0}; 
-
-     object test5; 
-    test5.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test5.voxelization("rabbit_"); 
-    test5.position = {0.0, 0.5, 0}; 
-
-    object test6;
-    test6.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test6.voxelization("rabbit_");
-    test6.position = {0.5, 0.5, 0}; 
-
-    object test7;
-    test7.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test7.voxelization("rabbit_");
-    test7.position = {1.0, 0.5, 0}; 
-
-    object test8;
-    test8.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test8.voxelization("rabbit_");
-    test8.position = {1.5, 0.5, 0.0}; 
-
-    object test9; 
-    test9.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test9.voxelization("rabbit_"); 
-    test9.position = {0.0, 1, 0}; 
-
-    object test10;
-    test10.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test10.voxelization("rabbit_");
-    test10.position = {0.5, 1, 0}; 
-
-    object test11;
-    test11.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test11.voxelization("rabbit_");
-    test11.position = {1.0, 1, 0}; 
-
-    object test12;
-    test12.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test12.voxelization("rabbit_");
-    test12.position = {1.5, 1, 0.0}; 
-
-    object test13; 
-    test13.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test13.voxelization("rabbit_"); 
-    test13.position = {0.0, 1.5, 0}; 
-
-    object test14;
-    test14.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test14.voxelization("rabbit_");
-    test14.position = {0.5, 1.5, 0}; 
-
-    object test15;
-    test15.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test15.voxelization("rabbit_");
-    test15.position = {1.0, 1.5, 0}; 
-
-    object test16;
-    test16.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test16.voxelization("rabbit_");
-    test16.position = {1.5, 1.5, 0.0}; 
-
 
     /////////////////////////
     //Setting up SDL/OpenGL//
@@ -1137,3 +1073,83 @@ int main(int argc, char *argv[])
 
     return 0;
 };
+
+    // object test1; 
+    // test1.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test1.voxelization("rabbit_"); 
+    // test1.position = {0.0, 0, 0}; 
+
+    // object test2;
+    // test2.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test2.voxelization("rabbit_");
+    // test2.position = {0.5, 0, 0}; 
+
+    // object test3;
+    // test3.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test3.voxelization("rabbit_");
+    // test3.position = {1.0, 0, 0}; 
+
+    // object test4;
+    // test4.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test4.voxelization("rabbit_");
+    // test4.position = {1.5, 0, 0.0}; 
+
+    //  object test5; 
+    // test5.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test5.voxelization("rabbit_"); 
+    // test5.position = {0.0, 0.5, 0}; 
+
+    // object test6;
+    // test6.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test6.voxelization("rabbit_");
+    // test6.position = {0.5, 0.5, 0}; 
+
+    // object test7;
+    // test7.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test7.voxelization("rabbit_");
+    // test7.position = {1.0, 0.5, 0}; 
+
+    // object test8;
+    // test8.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test8.voxelization("rabbit_");
+    // test8.position = {1.5, 0.5, 0.0}; 
+
+    // object test9; 
+    // test9.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test9.voxelization("rabbit_"); 
+    // test9.position = {0.0, 1, 0}; 
+
+    // object test10;
+    // test10.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test10.voxelization("rabbit_");
+    // test10.position = {0.5, 1, 0}; 
+
+    // object test11;
+    // test11.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test11.voxelization("rabbit_");
+    // test11.position = {1.0, 1, 0}; 
+
+    // object test12;
+    // test12.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test12.voxelization("rabbit_");
+    // test12.position = {1.5, 1, 0.0}; 
+
+    // object test13; 
+    // test13.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test13.voxelization("rabbit_"); 
+    // test13.position = {0.0, 1.5, 0}; 
+
+    // object test14;
+    // test14.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test14.voxelization("rabbit_");
+    // test14.position = {0.5, 1.5, 0}; 
+
+    // object test15;
+    // test15.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test15.voxelization("rabbit_");
+    // test15.position = {1.0, 1.5, 0}; 
+
+    // object test16;
+    // test16.polygon_mesh.load_mesh("meshes/bunny.obj");
+    // test16.voxelization("rabbit_");
+    // test16.position = {1.5, 1.5, 0.0}; 

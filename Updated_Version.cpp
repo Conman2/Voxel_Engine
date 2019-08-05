@@ -1,5 +1,6 @@
-#include "math.hpp"
-#include "font.hpp"
+#include "headers/math.hpp"
+#include "headers/font.hpp"
+#include <math.h>
 #include <ctime>
 #include <vector>
 #include <fstream>
