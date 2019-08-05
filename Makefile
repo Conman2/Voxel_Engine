@@ -33,13 +33,13 @@ else
 endif
 
 #OBJS specifies which files to compile as part of the project
-OBJS = OpenGL.cpp
+OBJS = Game.cpp
 #CC specifies which compiler we're using
 CC = g++
 # Because of richards great code
 COMPILER_FLAGS += -g -fpermissive
 #OBJ_NAME specifies the name of our exectuable
-OBJ_NAME = OpenGL
+OBJ_NAME = Game
 
 #This is the target that compiles our executable
 all : $(OBJS)
