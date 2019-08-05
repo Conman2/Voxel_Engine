@@ -35,7 +35,7 @@
 
 //Global Variables 
 const int terrain_size = 600; //Currently need to change this value in header file as well cus i am a retard shut up. 
-const float voxel_size = 0.05f; //This is world voxel size
+const float voxel_size = 0.003f; //This is world voxel size
 const int world_voxel_limit = 500000; //This the limit to voxels rendered at one time
 int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
 const int screen_width = 1000;
@@ -67,7 +67,7 @@ float backward_speed = 0, roll_left_speed = 0;
 vect delta_position;      vect delta_angle;
 
 //Fps Counter Variable
-float fps[5]; int fps_counter = 0;  int avg_fps; float fps_timer;
+float fps[5]; int fps_counter = 0;  int avg_fps; float fps_timer; int avg_vox; 
 
 //Used to store a mesh
 struct mesh
@@ -659,10 +659,11 @@ int main(int argc, char *argv[])
     
     //Create Terrrain
     printf("Creating Terrain...  \n"); 
-    float height_map[terrain_size][terrain_size];
-    generate_terrain(terrain_size, terrain_size, terrain_size, 3.0, 1, height_map);
-    object terrain; 
-    terrain.terrain_voxelization(height_map);
+
+    // float height_map[terrain_size][terrain_size];
+    // generate_terrain(terrain_size, terrain_size, terrain_size, 3.0, 1, height_map, 1);
+    // object terrain; 
+    // terrain.terrain_voxelization(height_map);
 
     //Initialize font 
     initialize_font(character_array); 
@@ -673,6 +674,26 @@ int main(int argc, char *argv[])
 
     //This creates and Object asigns a mesh to it and then voxelizes that mesh
     printf("Creating Game Assets...  \n"); 
+
+    object test1; 
+    test1.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test1.voxelization("rabbit_");  
+    test1.position = {0.0, 0, 0}; 
+
+    object test2;
+    test2.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test2.voxelization("rabbit_");
+    test2.position = {0.5, 0, 0}; 
+
+    object test3;
+    test3.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test3.voxelization("rabbit_");
+    test3.position = {1.0, 0, 0}; 
+
+    object test4;
+    test4.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test4.voxelization("rabbit_");
+    test4.position = {1.5, 0, 0.0}; 
 
     /////////////////////////
     //Setting up SDL/OpenGL//
@@ -974,21 +995,23 @@ int main(int argc, char *argv[])
         {
             avg_fps = (int) fps_counter/fps_timer; 
             fps_timer = 0; fps_counter = 0; 
+            avg_vox = temp_voxel_limit; 
             //printf("FPS: %i \n", avg_fps);
-            printf("Voxel Number: %i \n", temp_voxel_limit);
+            //printf("Voxel Number: %i \n", temp_voxel_limit);
         }
         
         //Write to screen 
-        voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_fps), 10.0f, 10.0f, font_size, {1, 1, 1, 1});
+        voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_fps), 10.0f,                 10.0f, font_size, {1, 1, 1, 1});
+        voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_vox), 10.0f, screen_height*2 - 50, font_size, {1, 1, 1, 1});
 
         //Project the terrain voxels 
-        voxel_projected = terrain.project_voxels(camera, camera.projection, voxel_projected); 
+        //voxel_projected = terrain.project_voxels(camera, camera.projection, voxel_projected); 
 
         //Render and update attitude
-        //voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test2.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test3.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test4.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test2.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test3.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test4.project_voxels(camera, camera.projection, voxel_projected);
         // voxel_projected = test5.project_voxels(camera, camera.projection, voxel_projected);
         // voxel_projected = test6.project_voxels(camera, camera.projection, voxel_projected);
         // voxel_projected = test7.project_voxels(camera, camera.projection, voxel_projected);

@@ -2,10 +2,10 @@
 
 struct colr
 {   
-    float r = 0; 
-    float g = 0;
-    float b = 0; 
-    float a = 255; 
+    float r = 1; 
+    float g = 1;
+    float b = 1; 
+    float a = 1; 
 };
 
 //*******
