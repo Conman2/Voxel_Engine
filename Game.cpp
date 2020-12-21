@@ -4,12 +4,14 @@
 #include <math.h>
 #include <vector>
 #include <fstream>
-#include <strstream>
-#include <algorithm>
+#include <sstream>
+#include <glm/glm.hpp>
+
+//Graphics Linaries
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 
-//Home Made Libaries
+//Home-Made Libaries
 #include "headers/math.hpp"
 #include "headers/font.hpp"
 #include "headers/map_generation.hpp"
@@ -18,28 +20,31 @@
 //TODO
 //
 
-//Add a refernce plane (so its not a easy to get lost)
-//Look into terrain (what method of rendering? Using voxels same as sprites or using perlin-noise and line voxel thing)
-//Draw less voxels the further away you are (LOD)
-//Make a HUD compass
-//Normalize mesh size (rabbit reall small) also add scaling input to the mesh
-//Fix the voxelization algorithim (make more efficent)
+//Draw less voxels the further away you are (LOD) (Voxel Octree)
+//Normalize mesh size (rabbit reall small) also add scaling input to the mesh. Done?
+//Make voxelization more efficent (Also clean-up AABB-Tri intersection function)
 //Mess with aspect ratio stuff (voxel size varying with aspect ratio)
 //Holes open up when the object in corner of screen because you are essentially looking at the non-existant face of the cube (the one parrel with the view vector) To fixe this you must take into account the 3d shape of a voxel
 //Rotate around an objets center (currently around the edge of the object)
-//Check if anypart of the Object AABB is in camera before cehcking each voxel
+//Check if anypart of the Object AABB is in camera before cehcking each voxel (More efficient for lots of objects?) 
 //Move all font data into a single matrix (making initializing it easier)
 //Create a Initialize funtion and a cleanup function which handles OpenGl and SDL2 attributes ect.
 //Move the shader programs into a class
 //Data streaming to increase amount of voxels which can be rendered (http://voidptr.io/blog/2016/04/28/ldEngine-Part-1.html)
+//Remove the stupid screen scale crap from the font scale thing 
+//Make Character/HUD arrays textures
+//Colour to models (Maybe write function to allow colouring)
+//Aspect ratio being streamed to GPU in translations. should be made a uniform variable 
+//Shadows (may need to store voxels in bool array)
 
 //Global Variables 
 const int terrain_size = 600; //Currently need to change this value in header file as well cus i am a retard shut up. 
-const float voxel_size = 0.003f; //This is world voxel size
+const float voxel_size = 0.01f; //This is world voxel size
 const int world_voxel_limit = 500000; //This the limit to voxels rendered at one time
 int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
-const int screen_width = 1000;
+const int screen_width = 1500;
 const int screen_height = 1000;
+float aspect_ratio = (float) screen_height/screen_width; 
 
 //World Space Defintions 
 const vect world_origin = {0, 0, 0, 1};
@@ -49,7 +54,8 @@ const vect world_foward = {0, 0, 1, 0};
 
 //Font Storage
 int font_size = 6; //It seems important that this number isn't odd
-bool character_array[7][5][95];
+//bool character_array[7][5][95];
+bool small_character_array[5][4][95];
 
 //Physics Variables 
 const float velocity = 1;
@@ -101,7 +107,7 @@ struct mesh
 			char line[136];
 			f.getline(line, 136);
 
-			std::strstream s;
+			std::stringstream s;
 			s << line;
 
 			char junk;
@@ -146,9 +152,9 @@ struct voxel
 //This stores all seen voxels 
 std::vector<voxel> voxel_projected;
 
-//
-//Camera Class 
-//
+////////////////
+//Camera Class//
+////////////////
 class camera
 {
     private: 
@@ -168,8 +174,14 @@ class camera
         vect right;
         vect foward;
 
+        //This stores this objects voxels 
+        std::vector<voxel> voxels; 
+
         //This objects Look At matrix (if it is a camera)
         float projection[4][4];
+        float look_at[4][4]; 
+
+
 
         //Sets up projection matrix
         void intialize_projection_matrix()
@@ -184,26 +196,98 @@ class camera
             quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward) ;
 
             //Updating Objects Local Axis from rotation
-            up     = vector_normalize(quaternion_rotation(quaternion, world_up)); 
-            right  = vector_normalize(quaternion_rotation(quaternion, world_right));
+            up     = vector_normalize(quaternion_rotation(quaternion, world_up));
+            right  = vector_normalize(quaternion_rotation(quaternion, world_right)); 
             foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
 
             //Position Update
             position.x += vector_dot_product(delta_position, right); 
             position.y += vector_dot_product(delta_position, up); 
             position.z += vector_dot_product(delta_position, foward); 
+
+            //Converting Quaternion Angle into Euler (so our puny minds can comprehend whats happening)
+            euler = vector_add(vector_multiply(quaternion_to_euler(quaternion), 180/3.141593), {180, 180, 180}); 
+
+            //Update the LookAt Matrix 
+            matrix_lookat(look_at, position, foward, up, right);
         };
+
+        //HUD System 
+        void intialize_HUD()
+        {   
+            //Adding Full Size HUD Texture
+            for(int i = 0; i < 4; i++)
+            {   
+                for (int j = 0; j < 36*42; j++)
+                {
+                   //Assign colour
+                   movingHUDfull[i][j] = movingHUDsection[i][j%36];
+                };
+            };               
+        }; 
+        
+        //Draw the HUD 
+        std::vector<voxel> render_HUD(std::vector<voxel> voxel_projected, int position_x, int position_y, float font_size, colr colour)
+        {
+            //Cropping location of scrolling texture
+            int index = (euler.y/10)*36; 
+
+            for(int i = 0; i < 8; i++)
+            {   
+                for (int j = 0; j < 216; j++)
+                {         
+                    if ( i < 4 )
+                    {
+                        if (movingHUDfull[i][j + index] == 1)
+                        {
+                            //Creating the voxel 
+                            voxel temp;
+                            
+                            //Character Positions
+                            temp.position.x = (position_x + j*font_size)/screen_width; 
+                            temp.position.y = (position_y + i*font_size)/screen_height; 
+                            temp.position.z = 10000; 
+                            temp.size = font_size; 
+                            temp.colour = colour; 
+
+                            //Add the voxel to the list 
+                            voxel_projected.push_back(temp); 
+                        }
+                    }
+                    else 
+                    {
+                        if (stationaryHUD[i - 4][j] == 1)
+                        {
+                            //Creating the voxel 
+                            voxel temp;
+                            
+                            //Character Positions
+                            temp.position.x = (position_x + j*font_size)/screen_width; 
+                            temp.position.y = (position_y + i*font_size)/screen_height; 
+                            temp.position.z = 10000; 
+                            temp.size = font_size; 
+                            temp.colour = colour; 
+
+                            //Add the voxel to the list 
+                            voxel_projected.push_back(temp); 
+                        };
+                    };
+                };
+            };
+
+            return voxel_projected; 
+        }; 
 }; 
 
-//
-//Object Class
-//
+////////////////
+//Object Class//
+////////////////
 class object
 {
     private: 
         //This stores the voxel infromation
         vect voxel_volume;  
-        voxel AABB_corners; 
+        vect AABB;  
 
     public:
         //Mesh Object 
@@ -238,10 +322,10 @@ class object
         };
 
         //This initializes a Voxel Object 
-        void voxelization(std::string sprite_name)
+        void voxelization(std::string sprite_name, float scale)
         {    
             //Make the files adress
-            std::string filepath = "voxelized/voxelized_"+sprite_name+std::to_string(voxel_size)+".txt"; 
+            std::string filepath = "voxelized/" + sprite_name + "_scale=" + std::to_string(scale) + "_voxelsize=" + std::to_string(voxel_size) + ".txt"; 
 
             //Check if file exists
             if ((bool) std::ifstream(filepath) == 1)
@@ -255,15 +339,20 @@ class object
                 int counter = 0; 
                 while (!file.eof())
                 {
-                    //not sure what this does
+                    //Not sure what this does
                     char line[136];
                     file.getline(line, 136);
 
                     //Temporaly storing the line data
-                    std::strstream thing;
+                    std::stringstream thing;
                     thing << line;
 
-                    if (counter > 5)
+                    if (counter == 5)
+                    {
+                        thing >> half_size.x >> half_size.y >> half_size.z;
+                        half_size = vector_multiply(half_size, voxel_size);
+                    }
+                    else if (counter > 7)
                     {
                         thing >> temporary.colour.r >> temporary.colour.g >> temporary.colour.b >> temporary.colour.a >> temporary.normal.x >> temporary.normal.y >> temporary.normal.z >> temporary.position.x >> temporary.position.y >> temporary.position.z; 
                         
@@ -284,23 +373,32 @@ class object
                 int counter = 0; 
 
                 //Precalculating the bounding box in terms of 0 - size instead of Min - Max
-                float boxi = polygon_mesh.max_x - polygon_mesh.min_x; 
-                float boxj = polygon_mesh.max_y - polygon_mesh.min_y; 
-                float boxk = polygon_mesh.max_z - polygon_mesh.min_z; 
+                AABB.x = polygon_mesh.max_x - polygon_mesh.min_x; 
+                AABB.y = polygon_mesh.max_y - polygon_mesh.min_y; 
+                AABB.z = polygon_mesh.max_z - polygon_mesh.min_z; 
+
+                float largest_axis = std::max(std::max(AABB.x, AABB.y), AABB.z);
+                vect normalized_AABB = vector_divide(AABB, largest_axis);
 
                 //Object Half Size 
-                half_size = {boxi/2, boxj/2, boxk/2}; 
+                half_size = vector_divide(normalized_AABB, 2); 
 
                 //Creates the box shape for storing the voxels 
-                voxel_volume = {ceil(boxi/voxel_size), ceil(boxj/voxel_size), ceil(boxk/voxel_size)};
+                voxel_volume = {ceil(normalized_AABB.x/voxel_size), ceil(normalized_AABB.y/voxel_size), ceil(normalized_AABB.z/voxel_size)};
                 vect voxel_half_size = {voxel_size/2, voxel_size/2, voxel_size/2};
 
                 //Fill in the voxel_volume data
+                time_t current_time = time(0); 
+                char* date_time = ctime(&current_time); 
+
+                //This is data for the user 
+                file << "//Date and Time Voxelized: \n";
+                file << date_time; 
                 file << "//World Voxel Size: \n";
                 file << voxel_size << "\n"; 
                 file << "//Voxel Amount in each direction (x, y, z): \n";
                 file << voxel_volume.x << "\t" << voxel_volume.y << "\t" << voxel_volume.z << "\n"; 
-                file << "//The Voxel Information (First 4 numbers rgba, remaining 3 numbers normal vector): \n";
+                file << "//The Voxel Information (First 4 numbers rgba, next 3 numbers voxel position (x, y, z), remaining normal vector (x, y, z)): \n";
 
                 //This loop goes through each voxel in the grid 
                 for (int i = 0; i < voxel_volume.x; i++)
@@ -318,19 +416,20 @@ class object
                             vect voxel_position = vector_add(left_corner_position, voxel_half_size);
 
                             //For every Polygon
-                            voxel new_voxel; new_voxel.colour.a = 0; 
-
                             for(auto poly: polygon_mesh.tris)
                             {   
                                 //calculate the current polygon
-                                vect tri1 = {poly.p[0].x - polygon_mesh.min_x, poly.p[0].y - polygon_mesh.min_y, poly.p[0].z - polygon_mesh.min_z};
-                                vect tri2 = {poly.p[1].x - polygon_mesh.min_x, poly.p[1].y - polygon_mesh.min_y, poly.p[1].z - polygon_mesh.min_z}; 
-                                vect tri3 = {poly.p[2].x - polygon_mesh.min_x, poly.p[2].y - polygon_mesh.min_y, poly.p[2].z - polygon_mesh.min_z};
+                                vect tri1 = {(poly.p[0].x - polygon_mesh.min_x)/AABB.x*normalized_AABB.x, (poly.p[0].y - polygon_mesh.min_y)/AABB.y*normalized_AABB.y, (poly.p[0].z - polygon_mesh.min_z)/AABB.z*normalized_AABB.z};
+                                vect tri2 = {(poly.p[1].x - polygon_mesh.min_x)/AABB.x*normalized_AABB.x, (poly.p[1].y - polygon_mesh.min_y)/AABB.y*normalized_AABB.y, (poly.p[1].z - polygon_mesh.min_z)/AABB.z*normalized_AABB.z}; 
+                                vect tri3 = {(poly.p[2].x - polygon_mesh.min_x)/AABB.x*normalized_AABB.x, (poly.p[2].y - polygon_mesh.min_y)/AABB.y*normalized_AABB.y, (poly.p[2].z - polygon_mesh.min_z)/AABB.z*normalized_AABB.z};
     
                                 //Check for intersection
-                                if (voxel_mesh_intersection(voxel_position, voxel_half_size, tri1, tri2, tri3) == 1){
-                                    //tell it that its solid 
-                                    new_voxel.colour.a = 1;
+                                if (triBoxOverlap({voxel_position.x, voxel_position.y, voxel_position.z}, {voxel_half_size.x, voxel_half_size.y, voxel_half_size.z}, {tri1.x, tri1.y, tri1.z}, {tri2.x, tri2.y, tri2.z}, {tri3.x, tri3.y, tri3.z}) == 1){
+                                //if (voxel_mesh_intersection(voxel_position, voxel_half_size, tri1, tri2, tri3) == 1){
+                                    
+                                    //Create the voxel 
+                                    voxel new_voxel;
+
                                     new_voxel.position = left_corner_position; 
 
                                     //Calculate the normal
@@ -339,12 +438,12 @@ class object
                                     //Adding the voxel information to the file 
                                     file << new_voxel.colour.r << "\t" << new_voxel.colour.g << "\t" << new_voxel.colour.b << "\t" << new_voxel.colour.a << "\t" << new_voxel.normal.x << "\t" << new_voxel.normal.y << "\t" << new_voxel.normal.z << "\t" << left_corner_position.x << "\t" << left_corner_position.y << "\t" << left_corner_position.z << "\n"; 
                                     
+                                    //Add result to the voxel array
+                                    voxels.push_back(new_voxel); 
+
                                     break; 
                                 };
                             }; 
-
-                            //Add result to the voxel array
-                            voxels.push_back(new_voxel); 
                         }; 
                     }; 
                 };
@@ -411,35 +510,33 @@ class object
         //Right now this renders this object (But this wont work when rendering multiple objects so will need to update )
         std::vector<voxel> project_voxels(camera camera, float projection[4][4], std::vector<voxel> voxel_projected)
         {
-            //Normalized Light Direction 
-            vect light_direction =  vector_normalize({0.0f, 1.0f, 1.0f});
-
             //Loop through the voxels and render the ones you want
             for (auto voxs: voxels)
             {   
                 //
                 //Moving into World Space 
                 //
+
                 vect normal_direction = quaternion_rotation(quaternion, voxs.normal); //Rotating Normal
                 vect voxel_position = vector_add(quaternion_rotation(quaternion, voxs.position), position); //Rotating/Translation the Voxel Position
 
                 //Removing unessecery voxels 
-                if (vector_dot_product(vector_normalize(vector_subtract(camera.position, voxel_position)), normal_direction) > -0.35f)  
+                if (vector_dot_product(vector_normalize(vector_subtract(camera.position, voxel_position)), normal_direction) > -1)  
                 {
                     //
                     //Moving Into View Space 
                     //
-                    vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
+
+                    //vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
+                    vect camera_view = matrix_vector_multiplication(vector_subtract(voxel_position, camera.position), camera.look_at);
 
                     //This removes Voxels behind the camera (Mirror Realm Rabbit)
                     if (camera_view.z < 0.0f)
                     {
-                        //Basic Lighting 
-                        float dot_product = std::min(1.0f, std::max(0.2f, vector_dot_product(light_direction, normal_direction)));
-
                         //
                         //Moving Into Projection Space 
                         // 
+
                         vect result = matrix_vector_multiplication(camera_view, projection);
                         result = vector_divide(result, result.w);
 
@@ -457,11 +554,26 @@ class object
                         //only create a object to calculate if in Camera View Space
                         if (temp.position.x > -1 && temp.position.x < 1 && temp.position.y > -1 && temp.position.y < 1)
                         {
+                            //Normalized Light Direction 
+                            vect light_direction =  vector_normalize({0.4f, 0.5f, 0.0f});
+                            vect light_colour = {1.0f, 1.0f, 1.0f};
+
+                            ///Ambient Light 
+                            float ambient_light_strength = 0.2; 
+                            vect ambient_light = vector_multiply(light_colour, ambient_light_strength);
+
+                            //Difused Light 
+                            vect difused_light = vector_multiply(light_colour, std::max(0.0f, vector_dot_product(light_direction, normal_direction)));
+
+                            //Specular Light 
+                            float specular_strength = 0.0; 
+                            vect specular_light = vector_multiply(light_colour, pow(std::max(0.0f, vector_dot_product(vector_normalize(vector_subtract(camera.position, temp.position)), vector_reflect(light_direction, voxs.normal))), 32) * specular_strength); 
+
+                            //Total Light
+                            vect total_light = vector_add(vector_add(ambient_light, difused_light), specular_light); 
+
                             //Looking Up the Colour from the Structure
-                            temp.colour.r = voxs.colour.r*dot_product; 
-                            temp.colour.g = voxs.colour.g*dot_product;
-                            temp.colour.b = voxs.colour.b*dot_product;   
-                            temp.colour.a = 1.0; 
+                            temp.colour = vector_colour_multiply(total_light, voxs.colour);
 
                             //Stores Each Voxel in Projection space
                             voxel_projected.push_back(temp);
@@ -480,9 +592,9 @@ class object
         };                                                                            
 }; 
 
-//
-//Shader Functions 
-//
+////////////////////
+//Shader Functions//
+////////////////////
 std::string read_file(std::string file_name)
 {
     //Open the text file in read mode and transfer the data 
@@ -567,46 +679,70 @@ static unsigned int create_shaders(std::string vertex_shader, std::string fragme
     return shader_program; 
 }; 
 
-//
-//Writing to Screen
-//
-void create_font_array(bool character_array[7][5][95], int index, const bool font_layout[7][5])
+/////////////////////
+//Writing to Screen//
+/////////////////////
+// void create_font_array(bool character_array[7][5][95], int index, const bool font_layout[7][5])
+// {
+//     for (int i = 0; i < 7; i++)
+//     {
+//         for (int j = 0; j < 5; j++)
+//         {
+//             character_array[i][j][index] = font_layout[i][j]; 
+//         };
+//     };
+// }; 
+
+void create_font_array_small(bool character_array[5][4][95], int index, const bool font_layout[5][4])
 {
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < 5; i++)
     {
-        for (int j = 0; j < 5; j++)
+        for (int j = 0; j < 4; j++)
         {
             character_array[i][j][index] = font_layout[i][j]; 
         };
     };
 }; 
 
-void initialize_font(bool character_array[7][5][95])
+void initialize_font()
 {
-    //Create all the textures 
-    create_font_array(character_array, ' ' - 32,  blk); 
-    create_font_array(character_array, '0' - 32,  zer); 
-    create_font_array(character_array, '1' - 32,  one); 
-    create_font_array(character_array, '2' - 32,  two); 
-    create_font_array(character_array, '3' - 32,  thr); 
-    create_font_array(character_array, '4' - 32,  fur); 
-    create_font_array(character_array, '5' - 32,  fiv); 
-    create_font_array(character_array, '6' - 32,  six); 
-    create_font_array(character_array, '7' - 32,  sev); 
-    create_font_array(character_array, '8' - 32,  eig);
-    create_font_array(character_array, '9' - 32,  nin);
-    create_font_array(character_array, 'a' - 32,  lca);
-    create_font_array(character_array, 'Q' - 32,  cpq);
-    create_font_array(character_array, 'W' - 32,  cpw);
-    create_font_array(character_array, 'X' - 32,  cpx);
-    create_font_array(character_array, 'Y' - 32,  cpy);
-    create_font_array(character_array, 'Z' - 32,  cpz);
-    create_font_array(character_array, ':' - 32,  col);
-    create_font_array(character_array, '.' - 32,  stp);
-    create_font_array(character_array, '-' - 32,  neg);    
+    //Move the characters into a big array 
+    // create_font_array(character_array, ' ' - 32,  blk); 
+    // create_font_array(character_array, '0' - 32,  zer); 
+    // create_font_array(character_array, '1' - 32,  one); 
+    // create_font_array(character_array, '2' - 32,  two); 
+    // create_font_array(character_array, '3' - 32,  thr); 
+    // create_font_array(character_array, '4' - 32,  fur); 
+    // create_font_array(character_array, '5' - 32,  fiv); 
+    // create_font_array(character_array, '6' - 32,  six); 
+    // create_font_array(character_array, '7' - 32,  sev); 
+    // create_font_array(character_array, '8' - 32,  eig);
+    // create_font_array(character_array, '9' - 32,  nin);
+    // create_font_array(character_array, 'a' - 32,  lca);
+    // create_font_array(character_array, 'Q' - 32,  cpq);
+    // create_font_array(character_array, 'W' - 32,  cpw);
+    // create_font_array(character_array, 'X' - 32,  cpx);
+    // create_font_array(character_array, 'Y' - 32,  cpy);
+    // create_font_array(character_array, 'Z' - 32,  cpz);
+    // create_font_array(character_array, ':' - 32,  col);
+    // create_font_array(character_array, '.' - 32,  stp);
+    // create_font_array(character_array, '-' - 32,  neg);    
+
+    //Move the characters into a big array  
+    create_font_array_small(small_character_array, ' ' - 32,  sml_blk); 
+    create_font_array_small(small_character_array, '0' - 32,  sml_zer); 
+    create_font_array_small(small_character_array, '1' - 32,  sml_one); 
+    create_font_array_small(small_character_array, '2' - 32,  sml_two); 
+    create_font_array_small(small_character_array, '3' - 32,  sml_thr); 
+    create_font_array_small(small_character_array, '4' - 32,  sml_fur); 
+    create_font_array_small(small_character_array, '5' - 32,  sml_fiv); 
+    create_font_array_small(small_character_array, '6' - 32,  sml_six); 
+    create_font_array_small(small_character_array, '7' - 32,  sml_sev); 
+    create_font_array_small(small_character_array, '8' - 32,  sml_eig);
+    create_font_array_small(small_character_array, '9' - 32,  sml_nin);
 };
 
-std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool character_array[7][5][95], std::string message, float position_x, float position_y, float font_size, colr colour)
+std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool character_array[5][4][95], std::string message, float position_x, float position_y, float font_size, colr colour)
 {
     //Moving from screen co-oridinates to OpenGl co-oridinates
     position_x = position_x - screen_width; 
@@ -619,9 +755,9 @@ std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool char
         int index = character - 32; 
 
         //Add the voxel_projected 
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < 5; i++)
         {
-            for (int j = 0; j < 5; j++)
+            for (int j = 0; j < 4; j++)
             {   
                 if (character_array[i][j][index] == 1)
                 {
@@ -651,7 +787,7 @@ std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool char
 //The main function 
 int main(int argc, char *argv[]) 
 {  
-    printf("\nStarting Up Game... \n"); 
+    printf("\nStarting Game... \n"); 
 
     ///////////////
     //Asset Setup//
@@ -666,34 +802,21 @@ int main(int argc, char *argv[])
     // terrain.terrain_voxelization(height_map);
 
     //Initialize font 
-    initialize_font(character_array); 
+    initialize_font(); 
 
     //This creates a camera for the world 
     camera camera;
     camera.intialize_projection_matrix(); 
+    camera.intialize_HUD(); 
 
     //This creates and Object asigns a mesh to it and then voxelizes that mesh
     printf("Creating Game Assets...  \n"); 
 
     object test1; 
     test1.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test1.voxelization("rabbit_");  
-    test1.position = {0.0, 0, 0}; 
-
-    object test2;
-    test2.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test2.voxelization("rabbit_");
-    test2.position = {0.5, 0, 0}; 
-
-    object test3;
-    test3.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test3.voxelization("rabbit_");
-    test3.position = {1.0, 0, 0}; 
-
-    object test4;
-    test4.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test4.voxelization("rabbit_");
-    test4.position = {1.5, 0, 0.0}; 
+    test1.voxelization("bunny_", 1);  
+    test1.quaternion = {0, 0.7068252, 0, 0.7073883}; 
+    test1.position =  {-test1.half_size.y, 0, 0};
 
     /////////////////////////
     //Setting up SDL/OpenGL//
@@ -728,10 +851,17 @@ int main(int argc, char *argv[])
 
     static unsigned int shader_program = create_shaders("shaders/vertex.glsl", "shaders/fragment.glsl");
     glUseProgram(shader_program);
+
+    ////////////////////////
+    //Intializing Textures//
+    ////////////////////////
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_NEAREST);
     
     //////////////////////////////
     //Intializing Voxel VBOs VAO//
     //////////////////////////////
+
+    printf("Creating VAO and VBOs...  \n"); 
 
     //This stores the vertex data for the mesh 
     const GLfloat voxel[4][3] =
@@ -776,7 +906,6 @@ int main(int argc, char *argv[])
     //////////////////////////////////////////////
 
     //Generate the buffer which will be used to store the translations 
-
     typedef std::vector<vect> trans;
     trans translations(world_voxel_limit);
 
@@ -855,21 +984,22 @@ int main(int argc, char *argv[])
     float game_time = SDL_GetTicks(); float time_elapsed = 0; 
 
     //Defining Exit condition
-    printf("Entering Game Loop...  \n"); 
-
     bool run = 1;  
     int counter = 0;
+
+    printf("Entering Game Loop...  \n"); 
+
     while (run == 1)
     {
         //SDL Loop Conditions (Key Presses)
         while (SDL_PollEvent(&window_event)){
             switch( window_event.type ){
                 case SDL_QUIT:
-                    printf("Exiting Game...  \n"); 
-
+                    printf("\nQuiting Game...  \n"); 
                     run = 0;
                     break;
-                    // Look for a keypress
+
+                // Look for a keypress
                 case SDL_KEYDOWN:
                     // Check the SDLKey values and move change the coords
                     switch( window_event.key.keysym.sym ){
@@ -970,9 +1100,6 @@ int main(int argc, char *argv[])
             }
         };
 
-        //Dont run the loop if game is closed
-        if (run != 1){break;}; 
-
         //Updating Time (in seconds)
         time_elapsed = (SDL_GetTicks() - game_time)/1000;
         game_time = SDL_GetTicks();
@@ -996,44 +1123,30 @@ int main(int argc, char *argv[])
             avg_fps = (int) fps_counter/fps_timer; 
             fps_timer = 0; fps_counter = 0; 
             avg_vox = temp_voxel_limit; 
-            //printf("FPS: %i \n", avg_fps);
-            //printf("Voxel Number: %i \n", temp_voxel_limit);
         }
         
-        //Write to screen 
-        voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_fps), 10.0f,                 10.0f, font_size, {1, 1, 1, 1});
-        voxel_projected = write_to_screen(voxel_projected, character_array, std::to_string((int) avg_vox), 10.0f, screen_height*2 - 50, font_size, {1, 1, 1, 1});
+        //Render Writing to Screen 
+        voxel_projected = write_to_screen(voxel_projected, small_character_array, std::to_string((int) avg_fps), 10.0f,                10.0f, font_size, {1, 1, 1, 1});
+        voxel_projected = write_to_screen(voxel_projected, small_character_array, std::to_string((int) avg_vox), 10.0f, screen_height*2 - 50, font_size, {1, 1, 1, 1});
+
+        //Render HUD to Screen
+        voxel_projected = camera.render_HUD(voxel_projected, -screen_width/2 - 150, -900, font_size, {1, 1, 1, 1}); 
 
         //Project the terrain voxels 
         //voxel_projected = terrain.project_voxels(camera, camera.projection, voxel_projected); 
 
         //Render and update attitude
         voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test2.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test3.project_voxels(camera, camera.projection, voxel_projected);
-        voxel_projected = test4.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test5.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test6.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test7.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test8.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test9.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test10.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test11.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test12.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test13.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test14.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test15.project_voxels(camera, camera.projection, voxel_projected);
-        // voxel_projected = test16.project_voxels(camera, camera.projection, voxel_projected);
 
-        //Render All of the voxels 
-        int counter = 0;
+        //Render Setup
+        counter = 0;
         for(auto voxels : voxel_projected)
         {   
             if (counter < world_voxel_limit)
             {
                 //Not sure why but that "1/" is needed. Probable becuase it cant be a value larger than 1
-                translations[counter] = (vect) {voxels.position.x, voxels.position.y, 1/voxels.position.z, 1.0};
-                scaling[counter] = voxels.size/screen_width; 
+                translations[counter] = (vect) {voxels.position.x, voxels.position.y, 1/voxels.position.z, aspect_ratio};
+                scaling[counter] = voxels.size/((screen_width + screen_height)/2);
                 colours[counter++] = voxels.colour; 
             }
             else 
@@ -1041,8 +1154,8 @@ int main(int argc, char *argv[])
                 break; 
             }
         }
-        
-        //Record how many voxels were used 
+
+        //Record how many voxels were used
         temp_voxel_limit = counter; 
 
         //Clear the stored voxels 
@@ -1094,85 +1207,7 @@ int main(int argc, char *argv[])
     SDL_DestroyWindow(window);
     SDL_Quit();
 
+    printf("Closing... \n"); 
+
     return 0;
 };
-
-    // object test1; 
-    // test1.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test1.voxelization("rabbit_"); 
-    // test1.position = {0.0, 0, 0}; 
-
-    // object test2;
-    // test2.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test2.voxelization("rabbit_");
-    // test2.position = {0.5, 0, 0}; 
-
-    // object test3;
-    // test3.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test3.voxelization("rabbit_");
-    // test3.position = {1.0, 0, 0}; 
-
-    // object test4;
-    // test4.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test4.voxelization("rabbit_");
-    // test4.position = {1.5, 0, 0.0}; 
-
-    //  object test5; 
-    // test5.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test5.voxelization("rabbit_"); 
-    // test5.position = {0.0, 0.5, 0}; 
-
-    // object test6;
-    // test6.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test6.voxelization("rabbit_");
-    // test6.position = {0.5, 0.5, 0}; 
-
-    // object test7;
-    // test7.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test7.voxelization("rabbit_");
-    // test7.position = {1.0, 0.5, 0}; 
-
-    // object test8;
-    // test8.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test8.voxelization("rabbit_");
-    // test8.position = {1.5, 0.5, 0.0}; 
-
-    // object test9; 
-    // test9.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test9.voxelization("rabbit_"); 
-    // test9.position = {0.0, 1, 0}; 
-
-    // object test10;
-    // test10.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test10.voxelization("rabbit_");
-    // test10.position = {0.5, 1, 0}; 
-
-    // object test11;
-    // test11.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test11.voxelization("rabbit_");
-    // test11.position = {1.0, 1, 0}; 
-
-    // object test12;
-    // test12.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test12.voxelization("rabbit_");
-    // test12.position = {1.5, 1, 0.0}; 
-
-    // object test13; 
-    // test13.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test13.voxelization("rabbit_"); 
-    // test13.position = {0.0, 1.5, 0}; 
-
-    // object test14;
-    // test14.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test14.voxelization("rabbit_");
-    // test14.position = {0.5, 1.5, 0}; 
-
-    // object test15;
-    // test15.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test15.voxelization("rabbit_");
-    // test15.position = {1.0, 1.5, 0}; 
-
-    // object test16;
-    // test16.polygon_mesh.load_mesh("meshes/bunny.obj");
-    // test16.voxelization("rabbit_");
-    // test16.position = {1.5, 1.5, 0.0}; 

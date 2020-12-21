@@ -20,6 +20,18 @@ struct vect
     float w = 1;
 };
 
+struct vect2
+{
+    float x = 0; 
+    float y = 0; 
+};
+
+//Vector Multiplication with Constant
+colr vector_colour_multiply(vect vector, colr colour)
+{
+    return {vector.x * colour.r, vector.y * colour.g, vector.z * colour.b, 1};
+};
+
 //Vector Adding 
 vect vector_add(vect vector1, vect vector2)
 {
@@ -66,6 +78,13 @@ float vector_magnitude(vect vector)
 vect vector_normalize(vect vector)
 {  
     return vector_divide(vector, vector_magnitude(vector));
+};
+
+//Vector 1 is reflected around Vector 2
+vect vector_reflect(vect vector1, vect vector2)
+{
+	vector_normalize(vector2); 
+	return vector_subtract(vector1, vector_multiply(vector2, vector_dot_product(vector1, vector2) * 2.0f));
 };
 
 //***********
@@ -129,25 +148,28 @@ quat quaternion_setup(quat total_quaternion, vect angle, vect x_axis, vect y_axi
     quat quaternion_z = quaternion_structure(z_axis, angle.z);
 
     //Multiplying change in quaternion by universal quaternion then rotating point
-    quat quaternion = quaternion_multiply(quaternion_multiply(quaternion_multiply(quaternion_z, quaternion_y), quaternion_x), total_quaternion);
+    quat quaternion = quaternion_multiply(quaternion_multiply(quaternion_multiply(quaternion_y, quaternion_x), quaternion_z), total_quaternion);
 
     return quaternion;
 
-    /* This Way Does it all at once and more efficiently and should be reimplented (tried and didnt work)
+    //This Way Does it all at once and more efficiently and should be reimplented (tried and didnt work)
     //precompute to save on processing time
-    float cosX = cos( angle[1] / 2 );
-    float cosY = cos( angle[2] / 2 );
-    float cosZ = cos( angle[0] / 2 );
-    float sinX = sin( angle[1] / 2 );
-    float sinY = sin( angle[2] / 2 );
-    float sinZ = sin( angle[0] / 2 );
+    // float cosX = cos( angle.y / 2 );
+    // float cosY = cos( angle.z / 2 );
+    // float cosZ = cos( angle.x / 2 );
+    // float sinX = sin( angle.y / 2 );
+    // float sinY = sin( angle.z / 2 );
+    // float sinZ = sin( angle.x / 2 );
 
-    //this is apparaently equavalent to rotation around all 3 axis
-    result[0] = cosX * cosY * cosZ - sinX * sinY * sinZ;
-    result[1] = sinX * cosY * cosZ - cosX * sinY * sinZ;
-    result[2] = cosX * sinY * cosZ + sinX * cosY * sinZ;
-    result[3] = cosX * cosY * sinZ + sinX * sinY * cosZ;
-    */
+    // //this is apparaently equavalent to rotation around all 3 axis
+	// quat result; 
+
+    // result.x = cosX * cosY * cosZ - sinX * sinY * sinZ;
+    // result.y = sinX * cosY * cosZ - cosX * sinY * sinZ;
+    // result.z = cosX * sinY * cosZ + sinX * cosY * sinZ;
+    // result.w = cosX * cosY * sinZ + sinX * sinY * cosZ;
+
+	// return quaternion_multiply(total_quaternion, result); 
 };
 
 //Provides the conjugate of a quaternion
@@ -171,12 +193,31 @@ vect vector_from_quaternion(quat quaternion)
 //Rotates a point or vector based on: R = P*Q*P^-1
 vect quaternion_rotation(quat quaternion, vect position)
 {   
-	//Perphaps more efficient to use: return v' = v + 2.0 * cross(cross(v, q.xyz) + q.w * v, q.xyz);;
-    quat conjugate = quaternion_conjugatation(quaternion);
-    return(vector_from_quaternion(quaternion_multiply(quaternion_multiply(quaternion, quaternion_from_vector(position)), conjugate)));
-	
+    // quat conjugate = quaternion_conjugatation(quaternion);
+    // return(vector_from_quaternion(quaternion_multiply(quaternion_multiply(quaternion, quaternion_from_vector(position)), conjugate)));
+
+	//Perphaps more efficient to use: return v' = v + 2.0 * cross(cross(v, q.xyz) + q.w * v, q.xyz);
 	// vect quat_vect = vector_from_quaternion(quaternion); 
 	// return vector_add(position, vector_multiply(vector_cross_product(vector_add(vector_cross_product(position, quat_vect), vector_multiply(position, quaternion.w)), quat_vect), 2));
+
+	//Maybe More Efficient
+	float x2 = quaternion.x + quaternion.x;
+    float y2 = quaternion.y + quaternion.y;
+    float z2 = quaternion.z + quaternion.z;
+    float wx2 = quaternion.w * x2;
+    float wy2 = quaternion.w * y2;
+    float wz2 = quaternion.w * z2;
+    float xx2 = quaternion.x * x2;
+    float xy2 = quaternion.x * y2;
+    float xz2 = quaternion.x * z2;
+    float yy2 = quaternion.y * y2;
+    float yz2 = quaternion.y * z2;
+    float zz2 = quaternion.z * z2;
+    float x = position.x * (1.0 - yy2 - zz2) + position.y * (xy2 - wz2) + position.z * (xz2 + wy2);
+    float y = position.x * (xy2 + wz2) + position.y * (1.0 - xx2 - zz2) + position.z * (yz2 - wx2);
+    float z = position.x * (xz2 - wy2) + position.y * (yz2 + wx2) + position.z * (1.0 - xx2 - yy2);
+
+    return {x, y, z, 1};
 }; 
 
 // Angles between Vectors
@@ -278,15 +319,15 @@ void matrix_projection(float matrix[4][4], float camera_view_angle, float screen
 };
 
 //*********************
-//Collision Detetection AABB (voxel) and Polygon (Theory by Tomas Akenine-Moller, code from someelse)
+//Collision Detetection Cube and a Triangle
 //*********************
 
-//This checks for intersection between polygon and voxel
 #pragma once
-#include <cmath>
 
-inline void findMinMax(float x0, float x1, float x2, float &min, float &max) 
-{
+#include <cmath>
+#include <glm/glm.hpp>
+
+inline void findMinMax(float x0, float x1, float x2, float &min, float &max) {
 	min = max = x0;
 	if (x1 < min)
 		min = x1;
@@ -298,41 +339,22 @@ inline void findMinMax(float x0, float x1, float x2, float &min, float &max)
 		max = x2;
 }
 
-inline bool planeBoxOverlap(vect normal, vect vert, vect maxbox) 
-{
-	vect vmin, vmax;
+inline bool planeBoxOverlap(glm::vec3 normal, glm::vec3 vert, glm::vec3 maxbox) {
+	glm::vec3 vmin, vmax;
 	float v;
-
-    v = vert.x;
-    if (normal.x > 0.0f) {
-        vmin.x = -maxbox.x - v;
-        vmax.x = maxbox.x - v;
-    } else {
-        vmin.x = maxbox.x - v;
-        vmax.x = -maxbox.x - v;
-    }
-
-    v = vert.y;
-    if (normal.y > 0.0f) {
-        vmin.y = -maxbox.y - v;
-        vmax.y = maxbox.y - v;
-    } else {
-        vmin.y = maxbox.y - v;
-        vmax.y = -maxbox.y - v;
-    }
-
-    v = vert.z;
-    if (normal.z > 0.0f) {
-        vmin.z = -maxbox.z - v;
-        vmax.z = maxbox.z - v;
-    } else {
-        vmin.z = maxbox.z - v;
-        vmax.z = -maxbox.z - v;
-    }
-	
-	if (vector_dot_product(normal, vmin) > 0.0f)
+	for (size_t q = 0; q < 3; q++) {
+		v = vert[q];
+		if (normal[q] > 0.0f) {
+			vmin[q] = -maxbox[q] - v;
+			vmax[q] = maxbox[q] - v;
+		} else {
+			vmin[q] = maxbox[q] - v;
+			vmax[q] = -maxbox[q] - v;
+		}
+	}
+	if (glm::dot(normal, vmin) > 0.0f)
 		return false;
-	if (vector_dot_product(normal, vmax) >= 0.0f)
+	if (glm::dot(normal, vmax) >= 0.0f)
 		return true;
 
 	return false;
@@ -340,8 +362,9 @@ inline bool planeBoxOverlap(vect normal, vect vert, vect maxbox)
 
 /*======================== X-tests ========================*/
 
-inline bool axisTestX01(float a, float b, float fa, float fb, const vect &v0, const vect &v2, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p2) 
-{
+inline bool axisTestX01(float a, float b, float fa, float fb, const glm::vec3 &v0,
+	const glm::vec3 &v2, const glm::vec3 &boxhalfsize, float &rad, float &min,
+	float &max, float &p0, float &p2) {
 	p0 = a * v0.y - b * v0.z;
 	p2 = a * v2.y - b * v2.z;
 	if (p0 < p2) {
@@ -356,8 +379,9 @@ inline bool axisTestX01(float a, float b, float fa, float fb, const vect &v0, co
 		return false;
 	return true;
 }
-inline bool axisTestX2(float a, float b, float fa, float fb, const vect &v0, const vect &v1, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p1) 
-{
+inline bool axisTestX2(float a, float b, float fa, float fb, const glm::vec3 &v0,
+	const glm::vec3 &v1, const glm::vec3 &boxhalfsize, float &rad, float &min,
+	float &max, float &p0, float &p1) {
 	p0 = a * v0.y - b * v0.z;
 	p1 = a * v1.y - b * v1.z;
 	if (p0 < p1) {
@@ -375,8 +399,9 @@ inline bool axisTestX2(float a, float b, float fa, float fb, const vect &v0, con
 
 /*======================== Y-tests ========================*/
 
-inline bool axisTestY02(float a, float b, float fa, float fb, const vect &v0, const vect &v2, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p2) 
-{
+inline bool axisTestY02(float a, float b, float fa, float fb, const glm::vec3 &v0,
+	const glm::vec3 &v2, const glm::vec3 &boxhalfsize, float &rad, float &min,
+	float &max, float &p0, float &p2) {
 	p0 = -a * v0.x + b * v0.z;
 	p2 = -a * v2.x + b * v2.z;
 	if (p0 < p2) {
@@ -392,8 +417,9 @@ inline bool axisTestY02(float a, float b, float fa, float fb, const vect &v0, co
 	return true;
 }
 
-inline bool axisTestY1(float a, float b, float fa, float fb, const vect &v0, const vect &v1, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p1) 
-{
+inline bool axisTestY1(float a, float b, float fa, float fb, const glm::vec3 &v0,
+	const glm::vec3 &v1, const glm::vec3 &boxhalfsize, float &rad, float &min,
+	float &max, float &p0, float &p1) {
 	p0 = -a * v0.x + b * v0.z;
 	p1 = -a * v1.x + b * v1.z;
 	if (p0 < p1) {
@@ -410,8 +436,9 @@ inline bool axisTestY1(float a, float b, float fa, float fb, const vect &v0, con
 }
 
 /*======================== Z-tests ========================*/
-inline bool axisTestZ12(float a, float b, float fa, float fb, const vect &v1, const vect &v2, const vect &boxhalfsize, float &rad, float &min, float &max, float &p1, float &p2) 
-{
+inline bool axisTestZ12(float a, float b, float fa, float fb, const glm::vec3 &v1,
+	const glm::vec3 &v2, const glm::vec3 &boxhalfsize, float &rad, float &min,
+	float &max, float &p1, float &p2) {
 	p1 = a * v1.x - b * v1.y;
 	p2 = a * v2.x - b * v2.y;
 	if (p1 < p2) {
@@ -427,8 +454,9 @@ inline bool axisTestZ12(float a, float b, float fa, float fb, const vect &v1, co
 	return true;
 }
 
-inline bool axisTestZ0(float a, float b, float fa, float fb, const vect &v0, const vect &v1, const vect &boxhalfsize, float &rad, float &min, float &max, float &p0, float &p1) 
-{
+inline bool axisTestZ0(float a, float b, float fa, float fb, const glm::vec3 &v0,
+	const glm::vec3 &v1, const glm::vec3 &boxhalfsize, float &rad, float &min,
+	float &max, float &p0, float &p1) {
 	p0 = a * v0.x - b * v0.y;
 	p1 = a * v1.x - b * v1.y;
 	if (p0 < p1) {
@@ -444,66 +472,91 @@ inline bool axisTestZ0(float a, float b, float fa, float fb, const vect &v0, con
 	return true;
 }
 
-bool voxel_mesh_intersection(vect boxcenter, vect boxhalfsize, vect tv0, vect tv1, vect tv2) {
-	vect v0, v1, v2;
+bool triBoxOverlap(glm::vec3 boxcenter, glm::vec3 boxhalfsize, glm::vec3 tv0, glm::vec3 tv1,
+	glm::vec3 tv2) {
+	/*    use separating axis theorem to test overlap between triangle and box */
+	/*    need to test for overlap in these directions: */
+	/*    1) the {x,y,z}-directions (actually, since we use the AABB of the triangle */
+	/*       we do not even need to test these) */
+	/*    2) normal of the triangle */
+	/*    3) crossproduct(edge from tri, {x,y,z}-directin) */
+	/*       this gives 3x3=9 more tests */
+	glm::vec3 v0, v1, v2;
 	float min, max, p0, p1, p2, rad, fex, fey, fez;
-	vect normal, e0, e1, e2;
+	glm::vec3 normal, e0, e1, e2;
 
-	v0 = vector_subtract(tv0, boxcenter);
-	v1 = vector_subtract(tv1, boxcenter);
-	v2 = vector_subtract(tv2, boxcenter);
+	/* This is the fastest branch on Sun */
+	/* move everything so that the boxcenter is in (0,0,0) */
+	v0 = tv0 - boxcenter;
+	v1 = tv1 - boxcenter;
+	v2 = tv2 - boxcenter;
 
-	e0 = vector_subtract(v1, v0);
-	e1 = vector_subtract(v2, v1);
-	e2 = vector_subtract(v2, v1);
+	/* compute triangle edges */
+	e0 = v1 - v0;
+	e1 = v2 - v1;
+	e2 = v0 - v2;
 
+	/* Bullet 3:  */
+	/*  test the 9 tests first (this was faster) */
 	fex = fabsf(e0.x);
 	fey = fabsf(e0.y);
 	fez = fabsf(e0.z);
 
 	if (!axisTestX01(e0.z, e0.y, fez, fey, v0, v2, boxhalfsize, rad, min, max, p0, p2))
-		return 0;
+		return false;
 	if (!axisTestY02(e0.z, e0.x, fez, fex, v0, v2, boxhalfsize, rad, min, max, p0, p2))
-		return 0;
+		return false;
 	if (!axisTestZ12(e0.y, e0.x, fey, fex, v1, v2, boxhalfsize, rad, min, max, p1, p2))
-		return 0;
+		return false;
 
 	fex = fabsf(e1.x);
 	fey = fabsf(e1.y);
 	fez = fabsf(e1.z);
 
 	if (!axisTestX01(e1.z, e1.y, fez, fey, v0, v2, boxhalfsize, rad, min, max, p0, p2))
-		return 0;
+		return false;
 	if (!axisTestY02(e1.z, e1.x, fez, fex, v0, v2, boxhalfsize, rad, min, max, p0, p2))
-		return 0;
+		return false;
 	if (!axisTestZ0(e1.y, e1.x, fey, fex, v0, v1, boxhalfsize, rad, min, max, p0, p1))
-		return 0;
+		return false;
 
 	fex = fabsf(e2.x);
 	fey = fabsf(e2.y);
 	fez = fabsf(e2.z);
 	if (!axisTestX2(e2.z, e2.y, fez, fey, v0, v1, boxhalfsize, rad, min, max, p0, p1))
-		return 0;
+		return false;
 	if (!axisTestY1(e2.z, e2.x, fez, fex, v0, v1, boxhalfsize, rad, min, max, p0, p1))
-		return 0;
+		return false;
 	if (!axisTestZ12(e2.y, e2.x, fey, fex, v1, v2, boxhalfsize, rad, min, max, p1, p2))
-		return 0;
+		return false;
 
+	/* Bullet 1: */
+	/*  first test overlap in the {x,y,z}-directions */
+	/*  find min, max of the triangle each direction, and test for overlap in */
+	/*  that direction -- this is equivalent to testing a minimal AABB around */
+	/*  the triangle against the AABB */
+
+	/* test in X-direction */
 	findMinMax(v0.x, v1.x, v2.x, min, max);
 	if (min > boxhalfsize.x || max < -boxhalfsize.x)
-		return 0;
+		return false;
 
+	/* test in Y-direction */
 	findMinMax(v0.y, v1.y, v2.y, min, max);
 	if (min > boxhalfsize.y || max < -boxhalfsize.y)
-		return 0;
+		return false;
 
+	/* test in Z-direction */
 	findMinMax(v0.z, v1.z, v2.z, min, max);
 	if (min > boxhalfsize.z || max < -boxhalfsize.z)
-		return 0;
+		return false;
 
-	normal = vector_cross_product(e0, e1);
+	/* Bullet 2: */
+	/*  test if the box intersects the plane of the triangle */
+	/*  compute plane equation of triangle: normal*x+d=0 */
+	normal = glm::cross(e0, e1);
 	if (!planeBoxOverlap(normal, v0, boxhalfsize))
-		return 0;
+		return false;
 
-	return 1;
+	return true; /* box and triangle overlaps */
 }
