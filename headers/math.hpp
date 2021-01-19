@@ -143,33 +143,15 @@ quat quaternion_structure(vect axis, float angle)
 //Seting up the new global rotation based on input axis, change in angles and total quaternion
 quat quaternion_setup(quat total_quaternion, vect angle, vect x_axis, vect y_axis, vect z_axis)
 {   
+	//Set-up the rotation quaternions 
     quat quaternion_x = quaternion_structure(x_axis, angle.x);
     quat quaternion_y = quaternion_structure(y_axis, angle.y);
     quat quaternion_z = quaternion_structure(z_axis, angle.z);
 
     //Multiplying change in quaternion by universal quaternion then rotating point
-    quat quaternion = quaternion_multiply(quaternion_multiply(quaternion_multiply(quaternion_y, quaternion_x), quaternion_z), total_quaternion);
+    quat quaternion = quaternion_multiply(quaternion_multiply(quaternion_multiply(quaternion_x, quaternion_y), quaternion_z), total_quaternion);
 
     return quaternion;
-
-    //This Way Does it all at once and more efficiently and should be reimplented (tried and didnt work)
-    //precompute to save on processing time
-    // float cosX = cos( angle.y / 2 );
-    // float cosY = cos( angle.z / 2 );
-    // float cosZ = cos( angle.x / 2 );
-    // float sinX = sin( angle.y / 2 );
-    // float sinY = sin( angle.z / 2 );
-    // float sinZ = sin( angle.x / 2 );
-
-    // //this is apparaently equavalent to rotation around all 3 axis
-	// quat result; 
-
-    // result.x = cosX * cosY * cosZ - sinX * sinY * sinZ;
-    // result.y = sinX * cosY * cosZ - cosX * sinY * sinZ;
-    // result.z = cosX * sinY * cosZ + sinX * cosY * sinZ;
-    // result.w = cosX * cosY * sinZ + sinX * sinY * cosZ;
-
-	// return quaternion_multiply(total_quaternion, result); 
 };
 
 //Provides the conjugate of a quaternion
@@ -269,15 +251,15 @@ void matrix_clear(float matrix[4][4])
     }
 };
 
-//Matrix Vector Multiplication (note that with this function input and output must be different variables)
+//Matrix Vector Multiplication
 vect matrix_vector_multiplication(vect vector, float matrix[4][4])
 {   
     vect result;
 
-    result.x = vector.x* matrix[0][0] + vector.y * matrix[0][1] + vector.z * matrix[0][2] + vector.w * matrix[0][3];
-    result.y = vector.x* matrix[1][0] + vector.y * matrix[1][1] + vector.z * matrix[1][2] + vector.w * matrix[1][3];
-    result.z = vector.x* matrix[2][0] + vector.y * matrix[2][1] + vector.z * matrix[2][2] + vector.w * matrix[2][3];
-    result.w = vector.x* matrix[3][0] + vector.y * matrix[3][1] + vector.z * matrix[3][2] + vector.w * matrix[3][3];
+	result.x = vector.x * matrix[0][0] + vector.y * matrix[1][0] + vector.z * matrix[2][0] + vector.w * matrix[3][0];
+    result.y = vector.x * matrix[0][1] + vector.y * matrix[1][1] + vector.z * matrix[2][1] + vector.w * matrix[3][1];
+    result.z = vector.x * matrix[0][2] + vector.y * matrix[1][2] + vector.z * matrix[2][2] + vector.w * matrix[3][2];
+    result.w = vector.x * matrix[0][3] + vector.y * matrix[1][3] + vector.z * matrix[2][3] + vector.w * matrix[3][3];
 
     return result;
 };
@@ -285,19 +267,13 @@ vect matrix_vector_multiplication(vect vector, float matrix[4][4])
 //Look at Matrix
 void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_foward, vect camera_up, vect camera_right)
 {
-    //Look At Matrix 
-    // matrix[0][0] = camera_right.x;     matrix[0][1] = camera_right.y;     matrix[0][2] = camera_right.z;     matrix[0][3] = -vector_dot_product(camera_right,     camera_position);
-    // matrix[1][0] = camera_up.x;        matrix[1][1] = camera_up.y;        matrix[1][2] = camera_up.z;        matrix[1][3] = -vector_dot_product(camera_up,        camera_position);
-    // matrix[2][0] = camera_foward.x;    matrix[2][1] = camera_foward.y;    matrix[2][2] = camera_foward.z;    matrix[2][3] = -vector_dot_product(camera_foward,    camera_position);
-    // matrix[3][0] = 0;                  matrix[3][1] = 0;                  matrix[3][2] = 0;                  matrix[3][3] = 1;
-
-	//This seems like the correct rotation method
-	matrix[0][0] = camera_right.x;    matrix[0][1] = camera_up.x;    matrix[0][2] = camera_foward.x;    matrix[0][3] = 0;
-    matrix[1][0] = camera_right.y;    matrix[1][1] = camera_up.y;    matrix[1][2] = camera_foward.y;    matrix[1][3] = 0;
-    matrix[2][0] = camera_right.z;    matrix[2][1] = camera_up.z;    matrix[2][2] = camera_foward.z;    matrix[2][3] = 0;
-    matrix[3][0] = 0;                 matrix[3][1] = 0;              matrix[3][2] = 0;                  matrix[3][3] = 1;  
+    matrix[0][0] = camera_right.x;  matrix[0][1] = camera_up.x;  matrix[0][2] = camera_foward.x;  matrix[0][3] = 0;
+    matrix[1][0] = camera_right.y;  matrix[1][1] = camera_up.y;  matrix[1][2] = camera_foward.y;  matrix[1][3] = 0;
+    matrix[2][0] = camera_right.z;  matrix[2][1] = camera_up.z;  matrix[2][2] = camera_foward.z;  matrix[2][3] = 0;
+    matrix[3][0] = 0; 	   	     	matrix[3][1] = 0; 			 matrix[3][2] = 0; 				  matrix[3][3] = 1;
 };
 
+//Projection Matrix
 void matrix_projection(float matrix[4][4], float camera_view_angle, float screen_height, float screen_width, float z_max_distance, float z_min_distance)
 {
 	//Set all values to zero
@@ -310,12 +286,12 @@ void matrix_projection(float matrix[4][4], float camera_view_angle, float screen
     float z_other =       (float) (-z_max_distance * z_min_distance)/(z_max_distance - z_min_distance);
     float feild_of_view = (float) 1/tan(view_angle / 2);
 
-    //Assigning values to the correct position in the matrix
-    matrix[0][0] = aspect_ratio*feild_of_view; 
+    //Creating the matrix
+    matrix[0][0] = aspect_ratio * feild_of_view; 
     matrix[1][1] = feild_of_view; 
     matrix[2][2] = z_normalize; 
-    matrix[2][3] = z_other; 
-    matrix[3][2] = 1; 
+    matrix[3][2] = z_other; 
+    matrix[2][3] = 1; 
 };
 
 //*********************
@@ -323,9 +299,8 @@ void matrix_projection(float matrix[4][4], float camera_view_angle, float screen
 //*********************
 
 #pragma once
-
 #include <cmath>
-#include <glm/glm.hpp>
+//#include <glm/glm.hpp>
 
 inline void findMinMax(float x0, float x1, float x2, float &min, float &max) {
 	min = max = x0;
