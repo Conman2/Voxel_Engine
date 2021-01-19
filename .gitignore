@@ -1,4 +1,4 @@
-*.exe
+*Game.exe
 .vscode
 error logs/
 old/

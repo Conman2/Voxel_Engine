@@ -12,21 +12,10 @@ endif
 $(info Compiling on $(detected_OS))
 
 # Set flags depending on OS
-ifeq ($(detected_OS),MSYS)
-	#$(info hi richard)
-	#COMPILER_FLAGS specifies the additional compilation options we're using
-	# -w suppresses all warnings
-	# -Wl,-subsystem,windows gets rid of the console window
+ifeq ($(detected_OS), MSYS)
 	COMPILER_FLAGS += -Ofast
-	#-Wl,-subsystem,windows
-	#INCLUDE_PATHS specifies the additional include paths we'll need
-	#INCLUDE_PATHS += -IC:\mingw_dev_lib\include\SDL2
-	#INCLUDE_PATHS += -IC:\mingw_dev_lib\include\GL
-	#LIBRARY_PATHS specifies the additional library paths we'll need
-	#LIBRARY_PATHS += -LC:\mingw_dev_lib\lib
-	#LINKER_FLAGS specifies the libraries we're linking against
 	LINKER_FLAGS += -lmingw32 -lSDL2main -lSDL2 -lOpenGL32 -lglew32
-else ifeq ($(detected_OS),Linux)
+else ifeq ($(detected_OS), Linux)
 	LINKER_FLAGS += -lSDL2 -lOpenGL32 -lglew32 
 else
 	$(error Unsupported OS)

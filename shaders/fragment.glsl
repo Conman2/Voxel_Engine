@@ -1,7 +1,10 @@
 #version 440 core
-out vec4 FragColor;
 
+//Inputs 
 in vec4 fColor;
+
+//Outputs
+out vec4 FragColor;
 
 void main()
 {

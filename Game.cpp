@@ -21,28 +21,28 @@
 //
 
 //Draw less voxels the further away you are (LOD) (Voxel Octree)
-//Normalize mesh size (rabbit reall small) also add scaling input to the mesh. Done?
 //Make voxelization more efficent (Also clean-up AABB-Tri intersection function)
-//Mess with aspect ratio stuff (voxel size varying with aspect ratio)
 //Holes open up when the object in corner of screen because you are essentially looking at the non-existant face of the cube (the one parrel with the view vector) To fixe this you must take into account the 3d shape of a voxel
 //Rotate around an objets center (currently around the edge of the object)
-//Check if anypart of the Object AABB is in camera before cehcking each voxel (More efficient for lots of objects?) 
+//Check if anypart of the Object AABB is in camera before cehcking each voxel (More efficient for lots of objects???) 
 //Move all font data into a single matrix (making initializing it easier)
 //Create a Initialize funtion and a cleanup function which handles OpenGl and SDL2 attributes ect.
-//Move the shader programs into a class
+//Move the shader programs into a class?
 //Data streaming to increase amount of voxels which can be rendered (http://voidptr.io/blog/2016/04/28/ldEngine-Part-1.html)
 //Remove the stupid screen scale crap from the font scale thing 
 //Make Character/HUD arrays textures
 //Colour to models (Maybe write function to allow colouring)
 //Aspect ratio being streamed to GPU in translations. should be made a uniform variable 
-//Shadows (may need to store voxels in bool array)
+//Shadows? (may need to store voxels in Octree)
+//Fix camera
+//Update object rotations (to be same as camera)
 
 //Global Variables 
 const int terrain_size = 600; //Currently need to change this value in header file as well cus i am a retard shut up. 
-const float voxel_size = 0.01f; //This is world voxel size
+const float voxel_size = 0.015f; //This is world voxel size
 const int world_voxel_limit = 500000; //This the limit to voxels rendered at one time
 int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
-const int screen_width = 1500;
+const int screen_width = 1800;
 const int screen_height = 1000;
 float aspect_ratio = (float) screen_height/screen_width; 
 
@@ -167,6 +167,7 @@ class camera
         //Object Behavior 
         vect position;
         quat quaternion;
+        quat rotation_quaternion;
         vect euler; 
 
         //Objects Local Axes 
@@ -181,31 +182,43 @@ class camera
         float projection[4][4];
         float look_at[4][4]; 
 
-
-
         //Sets up projection matrix
         void intialize_projection_matrix()
-        {
+        {   
+            //Intitialize camera axis
+            up = world_up;
+            right = world_right;
+            foward = world_foward;
+
+            //Initialize projection matrix
             matrix_projection(projection, view_angle, screen_height, screen_width, z_max_distance, z_min_distance);
         };
         
-        //Updates the objects position and angle
+        //Updates the camera position and angle
         void update(vect delta_angle, vect delta_position)
         {     
             //Attitude Update
-            quaternion = quaternion_setup(quaternion, delta_angle, right, up, foward) ;
+            quat quaternion_x = quaternion_structure(right, delta_angle.x);
+            quat quaternion_y = quaternion_structure(up, delta_angle.y);
+            quat quaternion_z = quaternion_structure(foward, delta_angle.z);
+
+            //Multiplying change in quaternion by universal quaternion then rotating point
+            rotation_quaternion = quaternion_multiply(quaternion_multiply(quaternion_x, quaternion_y), quaternion_z);
+            quaternion = quaternion_multiply(rotation_quaternion, quaternion);
 
             //Updating Objects Local Axis from rotation
-            up     = vector_normalize(quaternion_rotation(quaternion, world_up));
-            right  = vector_normalize(quaternion_rotation(quaternion, world_right)); 
-            foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
+            up     = vector_normalize(quaternion_rotation(rotation_quaternion, up));
+            right  = vector_normalize(quaternion_rotation(rotation_quaternion, right)); 
+            foward = vector_normalize(quaternion_rotation(rotation_quaternion, foward));
 
-            //Position Update
-            position.x += vector_dot_product(delta_position, right); 
-            position.y += vector_dot_product(delta_position, up); 
-            position.z += vector_dot_product(delta_position, foward); 
+            //Update Position
+            // position.x += vector_dot_product(delta_position, right); 
+            // position.y += vector_dot_product(delta_position, up); 
+            // position.z += vector_dot_product(delta_position, foward); 
 
-            //Converting Quaternion Angle into Euler (so our puny minds can comprehend whats happening)
+            position = vector_add(vector_add(vector_add(vector_multiply(right, delta_position.x), vector_multiply(up, delta_position.y)), vector_multiply(foward, delta_position.z)), position);
+
+            //Converting Quaternion Angle into Euler
             euler = vector_add(vector_multiply(quaternion_to_euler(quaternion), 180/3.141593), {180, 180, 180}); 
 
             //Update the LookAt Matrix 
@@ -507,38 +520,28 @@ class object
             };
         }; 
 
-        //Right now this renders this object (But this wont work when rendering multiple objects so will need to update )
-        std::vector<voxel> project_voxels(camera camera, float projection[4][4], std::vector<voxel> voxel_projected)
+        //Render Object Voxels
+        std::vector<voxel> project_voxels(camera camera, std::vector<voxel> voxel_projected)
         {
             //Loop through the voxels and render the ones you want
             for (auto voxs: voxels)
             {   
-                //
-                //Moving into World Space 
-                //
-
+                //Apply Object Transformations (Do this with Matrices)
                 vect normal_direction = quaternion_rotation(quaternion, voxs.normal); //Rotating Normal
                 vect voxel_position = vector_add(quaternion_rotation(quaternion, voxs.position), position); //Rotating/Translation the Voxel Position
 
-                //Removing unessecery voxels 
+                //Removing unessecery voxels (Check this)
                 if (vector_dot_product(vector_normalize(vector_subtract(camera.position, voxel_position)), normal_direction) > -1)  
                 {
-                    //
-                    //Moving Into View Space 
-                    //
-
-                    //vect camera_view = quaternion_rotation(camera.quaternion, vector_subtract(voxel_position, camera.position));
+                    // Apply Camera Rotation and Translation
                     vect camera_view = matrix_vector_multiplication(vector_subtract(voxel_position, camera.position), camera.look_at);
 
                     //This removes Voxels behind the camera (Mirror Realm Rabbit)
                     if (camera_view.z < 0.0f)
                     {
-                        //
-                        //Moving Into Projection Space 
-                        // 
-
-                        vect result = matrix_vector_multiplication(camera_view, projection);
-                        result = vector_divide(result, result.w);
+                        //Projection
+                        vect result = matrix_vector_multiplication(camera_view, camera.projection);
+                        result = vector_divide(result, result.w);  
 
                         //Storing the Projected Positions and other Voxel Characteristics 
                         voxel temp; 
@@ -575,7 +578,7 @@ class object
                             //Looking Up the Colour from the Structure
                             temp.colour = vector_colour_multiply(total_light, voxs.colour);
 
-                            //Stores Each Voxel in Projection space
+                            //Stores Each Voxel
                             voxel_projected.push_back(temp);
                         };
                     };
@@ -806,6 +809,7 @@ int main(int argc, char *argv[])
 
     //This creates a camera for the world 
     camera camera;
+    camera.position = {0.0, 0.0, 0}; 
     camera.intialize_projection_matrix(); 
     camera.intialize_HUD(); 
 
@@ -816,7 +820,13 @@ int main(int argc, char *argv[])
     test1.polygon_mesh.load_mesh("meshes/bunny.obj");
     test1.voxelization("bunny_", 1);  
     test1.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test1.position =  {-test1.half_size.y, 0, 0};
+    test1.position =  {-0.5, -0.5, -2};
+
+    object test2; 
+    test2.polygon_mesh.load_mesh("meshes/bunny.obj");
+    test2.voxelization("bunny_", 1);  
+    test2.quaternion = {0, 0.7068252, 0, 0.7073883}; 
+    test2.position =  {0.5, -0.5, -2};
 
     /////////////////////////
     //Setting up SDL/OpenGL//
@@ -867,9 +877,9 @@ int main(int argc, char *argv[])
     const GLfloat voxel[4][3] =
     {
         { -0.5, 0.5,  0.5 },
-        { -0.5, -0.5, 0.5 }, 
         {  0.5, 0.5,  0.5 }, 
         { 0.5,  -0.5, 0.5 },
+        { -0.5, -0.5, 0.5 }, 
     };
 
     //The adress for the buffer objects 
@@ -981,7 +991,8 @@ int main(int argc, char *argv[])
     /////////////
 
     //Initializing Game Time 
-    float game_time = SDL_GetTicks(); float time_elapsed = 0; 
+    float game_time = SDL_GetTicks(); 
+    float time_elapsed = 0; 
 
     //Defining Exit condition
     bool run = 1;  
@@ -1136,7 +1147,8 @@ int main(int argc, char *argv[])
         //voxel_projected = terrain.project_voxels(camera, camera.projection, voxel_projected); 
 
         //Render and update attitude
-        voxel_projected = test1.project_voxels(camera, camera.projection, voxel_projected);
+        voxel_projected = test1.project_voxels(camera, voxel_projected);
+        voxel_projected = test2.project_voxels(camera, voxel_projected);
 
         //Render Setup
         counter = 0;
@@ -1188,7 +1200,7 @@ int main(int argc, char *argv[])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         //Instanced Array
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, temp_voxel_limit);
+        glDrawArraysInstanced(GL_QUADS, 0, 4, temp_voxel_limit);
 
         //Unbind the VAO
         glBindVertexArray(0);
