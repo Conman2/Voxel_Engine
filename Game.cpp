@@ -35,7 +35,11 @@
 //Aspect ratio being streamed to GPU in translations. should be made a uniform variable 
 //Shadows? (may need to store voxels in Octree)
 
-//The First VBO is a waist of memory, i think. could maybe do this in a geometery shader
+//The First VBO is a waist of memory, i think. could maybe do this in a geometery shade.
+//figure out how to efficiently remove the mirror realm rabbits instead of having a contant check.
+//move lighting into fragment shader
+//Reduce the colour resolution so that it feels more like pixel art.
+//Make the shader program object specific.
 
 
 //Global Variables 
@@ -60,7 +64,7 @@ bool small_character_array[5][4][95];
 
 //Camera Variables 
 const float velocity = 1.5;
-const float angular_velocity = 1.0;
+const float angular_velocity = 1.25;
 
 //Default Variables 
 float left_speed = 0,     yaw_left_speed = 0;
@@ -172,9 +176,9 @@ class camera
         vect euler; 
 
         //Objects Local Axes 
-        vect up;
-        vect right;
-        vect foward;
+        vect up = world_up;
+        vect right = world_right;
+        vect foward = world_foward;
 
         //This stores this objects voxels 
         std::vector<voxel> voxels; 
@@ -186,11 +190,6 @@ class camera
         //Sets up projection matrix
         void intialize_projection_matrix()
         {   
-            //Intitialize camera axis
-            up = world_up;
-            right = world_right;
-            foward = world_foward;
-
             //Initialize projection matrix
             matrix_projection(projection, view_angle, screen_height, screen_width, z_max_distance, z_min_distance);
         };
@@ -208,9 +207,9 @@ class camera
             quaternion = quaternion_multiply(rotation_quaternion, quaternion);
 
             //Updating Objects Local Axis from rotation
-            up     = vector_normalize(quaternion_rotation(rotation_quaternion, up));
-            right  = vector_normalize(quaternion_rotation(rotation_quaternion, right)); 
-            foward = vector_normalize(quaternion_rotation(rotation_quaternion, foward));
+            up     = vector_normalize(quaternion_rotation(quaternion, world_up));
+            right  = vector_normalize(quaternion_rotation(quaternion, world_right)); 
+            foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
 
             position = vector_add(vector_add(vector_add(vector_multiply(right, delta_position.x), vector_multiply(up, delta_position.y)), vector_multiply(foward, delta_position.z)), position);
 
@@ -310,12 +309,14 @@ class object
         vect position;
         quat rotation_quaternion;
         quat quaternion;
+        float model[4][4];
+        float rotation[4][4];
 
         //Objects local Axis 
-        vect up;
-        vect right;
-        vect foward;
-
+        vect up = world_up;
+        vect right = world_right;
+        vect foward = world_foward;
+    
         //Updates the objects position and angle
         void update_position_attitude(vect delta_angle, vect delta_position)
         {     
@@ -329,12 +330,16 @@ class object
             quaternion = quaternion_multiply(rotation_quaternion, quaternion);
 
             //Updating Objects Local Axis from rotation
-            up     = vector_normalize(quaternion_rotation(rotation_quaternion, up));
-            right  = vector_normalize(quaternion_rotation(rotation_quaternion, right)); 
-            foward = vector_normalize(quaternion_rotation(rotation_quaternion, foward));
+            up     = vector_normalize(quaternion_rotation(quaternion, world_up));
+            right  = vector_normalize(quaternion_rotation(quaternion, world_right)); 
+            foward = vector_normalize(quaternion_rotation(quaternion, world_foward));
 
             //Updating Position 
             position = vector_add(position, delta_position);
+
+            //Creating the model matrix
+            matrix_model(model, position, foward, up, right); 
+            matrix_rotation(rotation, foward, up, right);
         };
 
         //This initializes a Voxel Object 
@@ -530,14 +535,14 @@ class object
             for (auto voxs: voxels)
             {   
                 //Apply Object Transformations (Do this with Matrices)
-                vect normal_direction = quaternion_rotation(quaternion, voxs.normal); //Rotating Normal
-                vect voxel_position = vector_add(quaternion_rotation(quaternion, voxs.position), position); //Rotating/Translation the Voxel Position
+                vect normal_direction = matrix_vector_multiplication(voxs.normal, rotation);
+                vect voxel_position = matrix_vector_multiplication(voxs.position, model);
 
                 //Remove Voxels behind objects (based on normal direction)
-                if (vector_dot_product(normal_direction, camera.foward) > -0.5f)  
+                if (vector_dot_product(normal_direction, vector_subtract(voxel_position, camera.position)) < 0.0f)  
                 {
                     // Apply Camera Rotation and Translation
-                    vect camera_view = matrix_vector_multiplication(vector_subtract(voxel_position, camera.position), camera.look_at);
+                    vect camera_view = matrix_vector_multiplication(voxel_position, camera.look_at);
 
                     //This removes Voxels behind the camera (Invisible objects behind the camera???)
                     if (camera_view.z < 0.0f)
@@ -561,7 +566,7 @@ class object
                         if (temp.position.x > -1 && temp.position.x < 1 && temp.position.y > -1 && temp.position.y < 1)
                         {
                             //Normalized Light Direction 
-                            vect light_direction =  vector_normalize({0.4f, 0.5f, 0.0f});
+                            vect light_direction =  vector_normalize({-0.4f, 0.5f, 0.0f});
                             vect light_colour = {1.0f, 1.0f, 1.0f};
 
                             ///Ambient Light 
@@ -572,7 +577,7 @@ class object
                             vect difused_light = vector_multiply(light_colour, std::max(0.0f, vector_dot_product(light_direction, normal_direction)));
 
                             //Specular Light 
-                            float specular_strength = 0.0; 
+                            float specular_strength = 0.01; 
                             vect specular_light = vector_multiply(light_colour, pow(std::max(0.0f, vector_dot_product(vector_normalize(vector_subtract(camera.position, temp.position)), vector_reflect(light_direction, voxs.normal))), 32) * specular_strength); 
 
                             //Total Light
@@ -592,92 +597,96 @@ class object
         };                                                                            
 }; 
 
-////////////////////
-//Shader Functions//
-////////////////////
-std::string read_file(std::string file_name)
+////////////////
+//Shader Class//
+////////////////
+class shader
 {
-    //Open the text file in read mode and transfer the data 
-    std::ifstream file(file_name);   
+    public:
+        std::string read_file(std::string file_name)
+        {
+            //Open the text file in read mode and transfer the data 
+            std::ifstream file(file_name);   
 
-    //Return data  (and convert std::ifstream to std::string)
-    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+            //Return data  (and convert std::ifstream to std::string)
+            return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        };
+
+        unsigned int compile_shader(std::string file_name, unsigned int shader_type) 
+        {
+            //Create the OpenGL Shader
+            unsigned int shader_id = glCreateShader(shader_type); 
+
+            //Read The Souce File 
+            std::string shader_data = read_file(file_name); 
+
+            //Transfer it into the datatype OpenGL wants 
+            const char* source = shader_data.c_str(); 
+
+            //Link Source code to Shader Id
+            glShaderSource(shader_id, 1, &source, nullptr); 
+
+            //Compile the Shader
+            glCompileShader(shader_id);  
+
+            //Error Checking and Outputting
+            int compile_status; 
+            glGetShaderiv(shader_id, GL_COMPILE_STATUS, &compile_status);
+            if (compile_status == GL_FALSE)
+            {   
+                //If there is an error print error message
+                int length; 
+                glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &length);
+
+                //Does something wack
+                char* message = (char*)alloca(length* sizeof(char)); 
+                glGetShaderInfoLog(shader_id, length, &length, message); 
+                
+                //Write error message to file
+                std::string error_log = "error_logs/"+file_name+".txt"; 
+
+                //Get time and date of the error message 
+                time_t current_time = time(0); 
+                char* date_time = ctime(&current_time); 
+
+                //Write the error log
+                std::ofstream file;
+                file.open(error_log, std::ofstream::out | std::ofstream::trunc);
+                file << date_time << "/n" << message; 
+
+                //Clean Up 
+                glDeleteShader(shader_id);
+
+                return 0; 
+            };
+
+            //Return the compiled shader
+            return shader_id; 
+        };
+
+        unsigned int create_shaders(std::string vertex_shader, std::string fragment_shader)
+        {   
+            //Create the Overall Program
+            unsigned int shader_program = glCreateProgram(); 
+
+            //Create and Compile the Shaders 
+            static unsigned int vertex_shader_id = compile_shader(vertex_shader, GL_VERTEX_SHADER); 
+            static unsigned int fragment_shader_id = compile_shader(fragment_shader, GL_FRAGMENT_SHADER); 
+
+            //Link the shader programs 
+            glAttachShader(shader_program, vertex_shader_id);
+            glAttachShader(shader_program, fragment_shader_id);
+            glLinkProgram(shader_program); 
+            glValidateProgram(shader_program);
+
+            //Delete the Unneeded shader data
+            glDeleteShader(vertex_shader_id);
+            glDeleteShader(fragment_shader_id);
+
+            //Return the final program
+            return shader_program; 
+        }; 
 };
-
-static unsigned int compile_shader(std::string file_name, unsigned int shader_type) 
-{
-    //Create the OpenGL Shader
-    unsigned int shader_id = glCreateShader(shader_type); 
-
-    //Read The Souce File 
-    std::string shader_data = read_file(file_name); 
-
-    //Transfer it into the datatype OpenGL wants 
-    const char* source = shader_data.c_str(); 
-
-    //Link Source code to Shader Id
-    glShaderSource(shader_id, 1, &source, nullptr); 
-
-    //Compile the Shader
-    glCompileShader(shader_id);  
-
-    //Error Checking and Outputting
-    int compile_status; 
-    glGetShaderiv(shader_id, GL_COMPILE_STATUS, &compile_status);
-    if (compile_status == GL_FALSE)
-    {   
-        //If there is an error print error message
-        int length; 
-        glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &length);
-
-        //Does something wack
-        char* message = (char*)alloca(length* sizeof(char)); 
-        glGetShaderInfoLog(shader_id, length, &length, message); 
-        
-        //Write error message to file
-        std::string error_log = "error_logs/"+file_name+".txt"; 
-
-        //Get time and date of the error message 
-        time_t current_time = time(0); 
-        char* date_time = ctime(&current_time); 
-
-        //Write the error log
-        std::ofstream file;
-        file.open(error_log, std::ofstream::out | std::ofstream::trunc);
-        file << date_time << "/n" << message; 
-
-        //Clean Up 
-        glDeleteShader(shader_id);
-
-        return 0; 
-    };
-
-    //Return the compiled shader
-    return shader_id; 
-};
-
-static unsigned int create_shaders(std::string vertex_shader, std::string fragment_shader)
-{   
-    //Create the Overall Program
-    unsigned int shader_program = glCreateProgram(); 
-
-    //Create and Compile the Shaders 
-    static unsigned int vertex_shader_id = compile_shader(vertex_shader, GL_VERTEX_SHADER); 
-    static unsigned int fragment_shader_id = compile_shader(fragment_shader, GL_FRAGMENT_SHADER); 
-
-    //Link the shader programs 
-    glAttachShader(shader_program, vertex_shader_id);
-    glAttachShader(shader_program, fragment_shader_id);
-    glLinkProgram(shader_program); 
-    glValidateProgram(shader_program);
-
-    //Delete the Unneeded shader data
-    glDeleteShader(vertex_shader_id);
-    glDeleteShader(fragment_shader_id);
-
-    //Return the final program
-    return shader_program; 
-}; 
 
 /////////////////////
 //Writing to Screen//
@@ -817,49 +826,7 @@ int main(int argc, char *argv[])
     test1.polygon_mesh.load_mesh("meshes/bunny.obj");
     test1.voxelization("bunny_", 1);  
     test1.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test1.position =  {-0.5, -0.5, -2};
-
-    object test2; 
-    test2.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test2.voxelization("bunny_", 1);  
-    test2.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test2.position =  {0.5, -0.5, -2};
-
-    object test3; 
-    test3.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test3.voxelization("bunny_", 1);  
-    test3.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test3.position =  {-0.5, 0.5, -2};
-
-    object test4; 
-    test4.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test4.voxelization("bunny_", 1);  
-    test4.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test4.position =  {0.5, 0.5, -2};
-
-    object test5; 
-    test5.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test5.voxelization("bunny_", 1);  
-    test5.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test5.position =  {-0.5, -0.5, -1.0};
-
-    object test6; 
-    test6.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test6.voxelization("bunny_", 1);  
-    test6.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test6.position =  {0.5, -0.5, -1.0};
-
-    object test7; 
-    test7.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test7.voxelization("bunny_", 1);  
-    test7.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test7.position =  {-0.5, 0.5, -1.0};
-
-    object test8; 
-    test8.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test8.voxelization("bunny_", 1);  
-    test8.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test8.position =  {0.5, 0.5, -1.0};
+    test1.position =  {-0.75, -0.75, -2};
 
     /////////////////////////
     //Setting up SDL/OpenGL//
@@ -882,7 +849,9 @@ int main(int argc, char *argv[])
     printf("Intializing GLEW...  \n"); 
 
     glewInit(); 
-    glEnable(GL_DEPTH_TEST); 
+    glEnable(GL_DEPTH_TEST);
+    //glEnable(GL_CULL_FACE);
+     
     glClearColor(0.0, 0.0, 0.0, 1.0); 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
     SDL_GL_SwapWindow(window); 
@@ -891,8 +860,9 @@ int main(int argc, char *argv[])
     //Setting Up Shaders//
     //////////////////////
     printf("Compiling Shader Programs...  \n"); 
-
-    static unsigned int shader_program = create_shaders("shaders/vertex.glsl", "shaders/fragment.glsl");
+    
+    shader shader;
+    static unsigned int shader_program = shader.create_shaders("shaders/vertex.glsl", "shaders/fragment.glsl");
     glUseProgram(shader_program);
 
     ////////////////////////
@@ -909,10 +879,10 @@ int main(int argc, char *argv[])
     //This stores the vertex data for the mesh 
     const GLfloat voxel[4][3] =
     {
-        { -0.5, 0.5,  0.5 },
-        { 0.5,  0.5,  0.5 }, 
-        { 0.5,  -0.5, 0.5 },
-        { -0.5, -0.5, 0.5 }, 
+        { -0.5, (GLfloat) 0.5 / aspect_ratio,  0.5 },
+        { 0.5,  (GLfloat) 0.5 / aspect_ratio,  0.5 }, 
+        { 0.5,  (GLfloat) -0.5 / aspect_ratio, 0.5 },
+        { -0.5, (GLfloat) -0.5 / aspect_ratio, 0.5 }, 
     };
 
     //Setup some Memory flags to enable geometery steaming
@@ -921,10 +891,10 @@ int main(int argc, char *argv[])
 
     //Memory Address to the VAO and VBO
     unsigned int VAO[1]; 
-    unsigned int VBO[4];
+    unsigned int VBO[3];
     
     //Create the VAO and VBO
-    glGenBuffers(4, VBO);
+    glGenBuffers(3, VBO);
     glGenVertexArrays(1, VAO); 
 
     //Set the VAO to the current use item
@@ -974,31 +944,6 @@ int main(int argc, char *argv[])
 
     translation_data = (float*) glMapBufferRange(GL_ARRAY_BUFFER, 0, translation_size, fMap);
 
-    //////////////////////////////////////////
-    //Generate the VBO to store scaling data//
-    //////////////////////////////////////////
-
-    //Assigning Buffer Address
-    static const size_t scaling_size = world_voxel_limit * sizeof(float);
-    float *scaling_data = (float*) malloc(scaling_size);
-
-    // Bind our first VBO as being the active buffer and storing vertex scalings
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
-    
-    // Copy the vertex data from dice to our buffer 
-    glBufferStorage(GL_ARRAY_BUFFER, scaling_size, &scaling_data[0], fCreate);
-
-    //This tells OpenGL the data layout
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(float), 0); 
-    
-    //Enable the VBO withing the VAO 
-    glEnableVertexAttribArray(2);
-
-    //Important for instanced rendering 
-    glVertexAttribDivisor(2, 1);
-
-    scaling_data = (float*) glMapBufferRange(GL_ARRAY_BUFFER, 0, scaling_size, fMap);
-
     /////////////////////////////////////////
     //Generate the VBO to store colour data//
     /////////////////////////////////////////
@@ -1008,19 +953,19 @@ int main(int argc, char *argv[])
     float *colour_data = (float*) malloc(colour_size);
 
     // Bind our first VBO as being the active buffer and storing vertex colours
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[3]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
     
     // Copy the vertex data from dice to our buffer 
     glBufferStorage(GL_ARRAY_BUFFER, colour_size, &colour_data[0], fCreate);
 
     //This tells OpenGL the data layout
-    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(colr), 0); 
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(colr), 0); 
     
     //Enable the VBO withing the VAO 
-    glEnableVertexAttribArray(3);
+    glEnableVertexAttribArray(2);
 
     //Important for instanced rendering 
-    glVertexAttribDivisor(3, 1);
+    glVertexAttribDivisor(2, 1);
 
     colour_data = (float*) glMapBufferRange(GL_ARRAY_BUFFER, 0, colour_size, fMap);
 
@@ -1188,14 +1133,8 @@ int main(int argc, char *argv[])
         //voxel_projected = terrain.project_voxels(camera, voxel_projected); 
 
         //Render and update attitude
+        test1.update_position_attitude({0.00, 0.001, 0.00}, {0.0, 0.0, 0});
         voxel_projected = test1.project_voxels(camera, voxel_projected);
-        voxel_projected = test2.project_voxels(camera, voxel_projected);
-        voxel_projected = test3.project_voxels(camera, voxel_projected);
-        voxel_projected = test4.project_voxels(camera, voxel_projected);
-        voxel_projected = test5.project_voxels(camera, voxel_projected);
-        voxel_projected = test6.project_voxels(camera, voxel_projected);
-        voxel_projected = test7.project_voxels(camera, voxel_projected);
-        voxel_projected = test8.project_voxels(camera, voxel_projected);
 
         //Render Setup
         counter = 0;
@@ -1208,9 +1147,7 @@ int main(int argc, char *argv[])
                 translation_data[counter*4]     = voxels.position.x;
                 translation_data[counter*4 + 1] = voxels.position.y;
                 translation_data[counter*4 + 2] = 1/voxels.position.z;
-                translation_data[counter*4 + 3] = aspect_ratio;
-
-                scaling_data[counter] = voxels.size/((screen_width + screen_height)/2);
+                translation_data[counter*4 + 3] = voxels.size/(screen_width);
 
                 colour_data[counter*4]     = voxels.colour.r;
                 colour_data[counter*4 + 1] = voxels.colour.g;
@@ -1253,11 +1190,21 @@ int main(int argc, char *argv[])
     //Program Cleanup//
     ///////////////////
 
-    printf("Deleting Graphics Assets... \n"); 
+    printf("Deleting Assets... \n"); 
 
+    //Cleanup OpenGL Assets
+    glDeleteBuffers(3, VBO);
+    glDeleteVertexArrays(1, VAO);
+    glDeleteProgram(shader_program); 
+
+    //Cleanup SDL Assets
     SDL_GL_DeleteContext(context); 
     SDL_DestroyWindow(window);
     SDL_Quit();
+
+    //Free buffer data
+    free(translation_data);
+    free(colour_data);
 
     printf("Closing... \n"); 
 

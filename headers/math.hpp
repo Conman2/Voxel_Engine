@@ -264,13 +264,35 @@ vect matrix_vector_multiplication(vect vector, float matrix[4][4])
     return result;
 };
 
+//Model Matrix
+void matrix_model(float matrix[4][4], vect position, vect foward, vect up, vect right)
+{
+    matrix[0][0] = right.x;    matrix[0][1] = up.x;       matrix[0][2] = foward.x;   matrix[0][3] = 0;
+    matrix[1][0] = right.y;    matrix[1][1] = up.y;       matrix[1][2] = foward.y;   matrix[1][3] = 0;
+    matrix[2][0] = right.z;    matrix[2][1] = up.z;       matrix[2][2] = foward.z;   matrix[2][3] = 0;
+    matrix[3][0] = position.x; matrix[3][1] = position.y; matrix[3][2] = position.z; matrix[3][3] = 1;	
+};
+
+//Rotation Matrix
+void matrix_rotation(float matrix[4][4], vect foward, vect up, vect right)
+{
+    matrix[0][0] = right.x;    matrix[0][1] = up.x;       matrix[0][2] = foward.x;   matrix[0][3] = 0;
+    matrix[1][0] = right.y;    matrix[1][1] = up.y;       matrix[1][2] = foward.y;   matrix[1][3] = 0;
+    matrix[2][0] = right.z;    matrix[2][1] = up.z;       matrix[2][2] = foward.z;   matrix[2][3] = 0;
+    matrix[3][0] =0; 		   matrix[3][1] = 0; 		  matrix[3][2] = 0; 		 matrix[3][3] = 1;	
+};
+
 //Look at Matrix
 void matrix_lookat(float matrix[4][4], vect camera_position, vect camera_foward, vect camera_up, vect camera_right)
 {
+	float x = -(camera_position.x * camera_right.x  + camera_position.y * camera_right.y  + camera_position.z * camera_right.z);
+	float y = -(camera_position.x * camera_up.x     + camera_position.y * camera_up.y     + camera_position.z * camera_up.z);
+	float z = -(camera_position.x * camera_foward.x + camera_position.y * camera_foward.y + camera_position.z * camera_foward.z);
+	
     matrix[0][0] = camera_right.x;  matrix[0][1] = camera_up.x;  matrix[0][2] = camera_foward.x;  matrix[0][3] = 0;
     matrix[1][0] = camera_right.y;  matrix[1][1] = camera_up.y;  matrix[1][2] = camera_foward.y;  matrix[1][3] = 0;
     matrix[2][0] = camera_right.z;  matrix[2][1] = camera_up.z;  matrix[2][2] = camera_foward.z;  matrix[2][3] = 0;
-    matrix[3][0] = 0; 	   	     	matrix[3][1] = 0; 			 matrix[3][2] = 0; 				  matrix[3][3] = 1;
+    matrix[3][0] = x; 	   	        matrix[3][1] = y; 			 matrix[3][2] = z; 		  		  matrix[3][3] = 1;
 };
 
 //Projection Matrix
