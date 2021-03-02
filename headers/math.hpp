@@ -264,6 +264,18 @@ vect matrix_vector_multiplication(vect vector, float matrix[4][4])
     return result;
 };
 
+//Matrix Vector Multiplication
+void matrix_matrix_multiplication(float result[4][4], float matrix1[4][4], float matrix2[4][4])
+{
+	for (int i = 0; i < 4; i++)
+	{
+		for (int j = 0; j < 4; j++)
+		{
+			result[j][i] = matrix1[j][0] * matrix2[0][i] + matrix1[j][1] * matrix2[1][i] + matrix1[j][2] * matrix2[2][i] + matrix1[j][3] * matrix2[3][i];
+		};
+	};
+};
+
 //Model Matrix
 void matrix_model(float matrix[4][4], vect position, vect foward, vect up, vect right)
 {

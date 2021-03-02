@@ -1,2 +1,0 @@
-Sat Jul 20 14:01:48 2019
-/n0(8) : error C7011: implicit cast from "int" to "vec4"

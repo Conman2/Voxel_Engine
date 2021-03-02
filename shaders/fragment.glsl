@@ -1,12 +1,10 @@
 #version 440 core
 
-//Inputs 
-in vec4 fColor;
-
-//Outputs
-out vec4 FragColor;
+//Input
+in vec4 aColour;
 
 void main()
 {
-    FragColor = fColor;
+    //Assign Colour
+    gl_FragColor = aColour;
 } 

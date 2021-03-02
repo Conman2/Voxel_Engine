@@ -1,66 +1,49 @@
-
 //Standard Libaries 
 #include <ctime>
 #include <math.h>
+#include <list>
 #include <vector>
 #include <fstream>
 #include <sstream>
 #include <glm/glm.hpp>
 
-//Graphics Linaries
+//Graphics Libaries
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 
-//Home-Made Libaries
+//Home-Made Libary
 #include "headers/math.hpp"
-#include "headers/font.hpp"
-#include "headers/map_generation.hpp"
 
-//
-//TODO
-//
+////////
+//TODO//
+////////
 
 //Proper Terrain
 //Draw less voxels the further away you are (LOD) (Voxel Octree)
-//Holes open up when the object in corner of screen because you are essentially looking at the non-existant face of the cube (the one parrel with the view vector) To fixe this you must take into account the 3d shape of a voxel
 //Rotate around an objets center (currently around the edge of the object)
 //Check if anypart of the Object AABB is in camera before cehcking each voxel (More efficient for lots of objects???) 
-//Move all font data into a single matrix (making initializing it easier)
 //Create a Initialize funtion and a cleanup function which handles OpenGl and SDL2 attributes ect.
-//Move the shader programs into a class???
-//Data streaming to increase amount of voxels which can be rendered (http://voidptr.io/blog/2016/04/28/ldEngine-Part-1.html)
-//Remove the stupid screen scale crap from the font scale thing 
 //Make Character/HUD arrays textures
 //Colour to models (Maybe write function to allow colouring)
-//Aspect ratio being streamed to GPU in translations. should be made a uniform variable 
 //Shadows? (may need to store voxels in Octree)
+//Improve Lighting 
+//Reduce the colour resolution so that it feels more like pixel art maybe.
+//Fix the Error logs for the shader progermas
+//Add a render check on CPU to see if obeject is in camera view or not?
+//Move keypress checks into function, maybe
 
-//The First VBO is a waist of memory, i think. could maybe do this in a geometery shade.
-//figure out how to efficiently remove the mirror realm rabbits instead of having a contant check.
-//move lighting into fragment shader
-//Reduce the colour resolution so that it feels more like pixel art.
-//Make the shader program object specific.
-
-
-//Global Variables 
-const int terrain_size = 600; //Currently need to change this value in header file as well cus i am a retard shut up. 
+//Global Variables
 const float voxel_size = 0.015f; //This is world voxel size
-const int world_voxel_limit = 500000; //This the limit to voxels rendered at one time
-int temp_voxel_limit; //This is used to store the amount of voxels if it is less than the world limit
 const int screen_width = 1500;
 const int screen_height = 1000;
 float aspect_ratio = (float) screen_height/screen_width; 
+float scaling_factor = 0.02; //screen_width * voxel_size * 2;
 
 //World Space Defintions 
 const vect world_origin = {0, 0, 0, 1};
 const vect world_right  = {1, 0, 0, 0};
 const vect world_up     = {0, 1, 0, 0};
 const vect world_foward = {0, 0, 1, 0};
-
-//Font Storage
-int font_size = 6; //It seems important that this number isn't odd
-//bool character_array[7][5][95];
-bool small_character_array[5][4][95];
 
 //Camera Variables 
 const float velocity = 1.5;
@@ -165,7 +148,7 @@ class camera
     private: 
         //Camera data 
         float view_angle = 90.0f; 
-        float z_max_distance = 10.0f;
+        float z_max_distance = 100.0f;
         float z_min_distance = 0.1f;
 
     public:
@@ -219,72 +202,6 @@ class camera
             //Update the LookAt Matrix 
             matrix_lookat(look_at, position, foward, up, right);
         };
-
-        //HUD System 
-        void intialize_HUD()
-        {   
-            //Adding Full Size HUD Texture
-            for(int i = 0; i < 4; i++)
-            {   
-                for (int j = 0; j < 36*42; j++)
-                {
-                   //Assign colour
-                   movingHUDfull[i][j] = movingHUDsection[i][j%36];
-                };
-            };               
-        }; 
-        
-        //Draw the HUD 
-        std::vector<voxel> render_HUD(std::vector<voxel> voxel_projected, int position_x, int position_y, float font_size, colr colour)
-        {
-            //Cropping location of scrolling texture
-            int index = (euler.y/10)*36; 
-
-            for(int i = 0; i < 8; i++)
-            {   
-                for (int j = 0; j < 216; j++)
-                {         
-                    if ( i < 4 )
-                    {
-                        if (movingHUDfull[i][j + index] == 1)
-                        {
-                            //Creating the voxel 
-                            voxel temp;
-                            
-                            //Character Positions
-                            temp.position.x = (position_x + j*font_size)/screen_width; 
-                            temp.position.y = (position_y + i*font_size)/screen_height; 
-                            temp.position.z = 10000; 
-                            temp.size = font_size; 
-                            temp.colour = colour; 
-
-                            //Add the voxel to the list 
-                            voxel_projected.push_back(temp); 
-                        }
-                    }
-                    else 
-                    {
-                        if (stationaryHUD[i - 4][j] == 1)
-                        {
-                            //Creating the voxel 
-                            voxel temp;
-                            
-                            //Character Positions
-                            temp.position.x = (position_x + j*font_size)/screen_width; 
-                            temp.position.y = (position_y + i*font_size)/screen_height; 
-                            temp.position.z = 10000; 
-                            temp.size = font_size; 
-                            temp.colour = colour; 
-
-                            //Add the voxel to the list 
-                            voxel_projected.push_back(temp); 
-                        };
-                    };
-                };
-            };
-
-            return voxel_projected; 
-        }; 
 }; 
 
 ////////////////
@@ -303,7 +220,8 @@ class object
         vect half_size; 
 
         //This stores this objects voxels 
-        std::vector<voxel> voxels; 
+        std::vector<voxel> voxel_object; 
+        int voxel_amount;
 
         //Object Behavior 
         vect position;
@@ -316,6 +234,103 @@ class object
         vect up = world_up;
         vect right = world_right;
         vect foward = world_foward;
+
+        //Render Buffers
+        unsigned int VAO[1]; 
+        unsigned int VBO[3];
+
+        //Voxel Data
+        const GLfloat mesh[4][3] =
+        {
+            {(GLfloat) -0.5 * scaling_factor, (GLfloat) 0.5 / aspect_ratio  * scaling_factor, 0.5 },
+            {(GLfloat) 0.5  * scaling_factor, (GLfloat) 0.5 / aspect_ratio  * scaling_factor, 0.5 }, 
+            {(GLfloat) 0.5  * scaling_factor, (GLfloat) -0.5 / aspect_ratio * scaling_factor, 0.5 },
+            {(GLfloat) -0.5 * scaling_factor, (GLfloat) -0.5 / aspect_ratio * scaling_factor, 0.5 }, 
+        };
+
+        //Initialise object 
+        void initialise()
+        {
+            //Prepare Data
+            std::vector<vect> translations(voxel_amount);
+            std::vector<vect> normals(voxel_amount);
+
+            //Populate Data
+            int counter = 0;
+            for(auto voxels : voxel_object)
+            {
+                translations[counter] = voxels.position;
+                normals[counter] = {voxels.normal.x, voxels.normal.y, voxels.normal.z, 0.0}; //Zero cancels out translation in model matrix 
+                counter++;
+            };
+
+            //Create the VAO and VBO
+            glGenBuffers(3, VBO);
+            glGenVertexArrays(1, VAO); 
+
+            //Set the VAO to the current use item
+            glBindVertexArray(VAO[0]); 
+
+            /////////////////////////////////////////
+            //Generate the VBO to store vertex data//
+            /////////////////////////////////////////
+
+            // Bind our first VBO as being the active buffer and storing vertex attributes (coordinates)
+            glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+            
+            // Copy the vertex data from dice to our buffer (4 and 3 are size of mesh array)
+            uint32_t buffer_size =  (4 * 3) * sizeof(GLfloat);
+            glBufferData(GL_ARRAY_BUFFER, buffer_size, mesh, GL_STATIC_DRAW);
+
+            //This tells OpenGL the data layout
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
+
+            //Enable the VBO within the VAO 
+            glEnableVertexAttribArray(0);
+            
+            //////////////////////////////////////////////
+            //Generate the VBO to store translation data//
+            //////////////////////////////////////////////
+
+            // Bind our first VBO as being the active buffer and storing vertex translations
+            glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+            
+            // Copy the vertex data from dice to our buffer 
+            buffer_size =  voxel_amount * sizeof(vect);
+            glBufferData(GL_ARRAY_BUFFER, buffer_size, &translations[0], GL_STATIC_DRAW);
+
+            //This tells OpenGL the data layout
+            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(vect), 0); 
+            
+            //Enable the VBO within the VAO 
+            glEnableVertexAttribArray(1);
+
+            //Important for instanced rendering 
+            glVertexAttribDivisor(1, 1);
+
+            /////////////////////////////////////////
+            //Generate the VBO to store noraml data//
+            /////////////////////////////////////////
+
+            // Bind our first VBO as being the active buffer and storing vertex translations
+            glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+            
+            // Copy the vertex data from dice to our buffer 
+            buffer_size =  voxel_amount * sizeof(vect);
+            glBufferData(GL_ARRAY_BUFFER, buffer_size, &normals[0], GL_STATIC_DRAW);
+
+            //This tells OpenGL the data layout
+            glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(vect), 0); 
+            
+            //Enable the VBO within the VAO 
+            glEnableVertexAttribArray(2);
+
+            //Important for instanced rendering 
+            glVertexAttribDivisor(2, 1);
+
+            //Unbind the VAO
+            glBindVertexArray(0);
+        };
     
         //Updates the objects position and angle
         void update_position_attitude(vect delta_angle, vect delta_position)
@@ -339,7 +354,7 @@ class object
 
             //Creating the model matrix
             matrix_model(model, position, foward, up, right); 
-            matrix_rotation(rotation, foward, up, right);
+            //matrix_rotation(rotation, foward, up, right);
         };
 
         //This initializes a Voxel Object 
@@ -355,7 +370,7 @@ class object
                 std::ifstream file(filepath); 
 
                 //This temporaly stores the extracted voxel
-                voxel temporary; 
+                voxel temporary;
                 
                 int counter = 0; 
                 while (!file.eof())
@@ -377,11 +392,13 @@ class object
                     {
                         thing >> temporary.colour.r >> temporary.colour.g >> temporary.colour.b >> temporary.colour.a >> temporary.normal.x >> temporary.normal.y >> temporary.normal.z >> temporary.position.x >> temporary.position.y >> temporary.position.z; 
                         
-                        voxels.push_back(temporary); 
+                        voxel_object.push_back(temporary); 
                     }
 
                     counter ++; 
                 }; 
+
+                voxel_amount = counter;
             }
 
             //If it doesn't exist create it and fill it with voxel information
@@ -404,7 +421,7 @@ class object
                 //Object Half Size 
                 half_size = vector_divide(normalized_AABB, 2); 
 
-                //Creates the box shape for storing the voxels 
+                //Creates the box shape for storing the voxel_object 
                 voxel_volume = {ceil(normalized_AABB.x/voxel_size), ceil(normalized_AABB.y/voxel_size), ceil(normalized_AABB.z/voxel_size)};
                 vect voxel_half_size = {voxel_size/2, voxel_size/2, voxel_size/2};
 
@@ -460,7 +477,7 @@ class object
                                     file << new_voxel.colour.r << "\t" << new_voxel.colour.g << "\t" << new_voxel.colour.b << "\t" << new_voxel.colour.a << "\t" << new_voxel.normal.x << "\t" << new_voxel.normal.y << "\t" << new_voxel.normal.z << "\t" << left_corner_position.x << "\t" << left_corner_position.y << "\t" << left_corner_position.z << "\n"; 
                                     
                                     //Add result to the voxel array
-                                    voxels.push_back(new_voxel); 
+                                    voxel_object.push_back(new_voxel); 
 
                                     break; 
                                 };
@@ -468,141 +485,51 @@ class object
                         }; 
                     }; 
                 };
+
+                //Record total amount of voxels
+                voxel_amount = voxel_object.size(); 
             }; 
         };
 
-        //Add terrain voxels
-        void terrain_voxelization(float height_map[terrain_size][terrain_size])
-        {
-            for(int i = 0; i < terrain_size; i++)
-            {
-                for(int j = 0; j < terrain_size; j++)
-                { 
-                    //Create a voxel 
-                    voxel new_voxel; 
+        //Render function
+        void render(GLuint ModelMatrixID, GLuint ViewMatrixID, float look_at[4][4])
+        {   
+            //Bind the Array Object
+            glBindVertexArray(VAO[0]);
 
-                    //Define its Attrabutes
-                    new_voxel.position.x = i*voxel_size; 
-                    new_voxel.position.y = j*voxel_size; 
-                    new_voxel.size = voxel_size; 
+            //Update the Model and View Matrices
+            glUniformMatrix4fv(ModelMatrixID, 1, NULL, &model[0][0]);
+            glUniformMatrix4fv(ViewMatrixID, 1, NULL, &look_at[0][0]);
 
-                    //Sea level 
-                    if (height_map[i][j] < 0.45)
-                    {
-                        new_voxel.position.z = 0.45;
-                        new_voxel.colour = {0.0, 0.41176, 0.58039, 1.0};
+            //Draw The Voxels
+            glDrawArraysInstanced(GL_QUADS, 0, 4, voxel_amount); 
 
-                        new_voxel.normal = {0.0, 0.0, 1.0, 1.0};
-                    }
-
-                    //Sand Dunes 
-                    else if (height_map[i][j] < 0.47)  
-                    {
-                        new_voxel.colour = {1.0, 0.662745, 0.372549, 1.0};
-                        new_voxel.position.z = height_map[i][j];
-
-                        //Calculating Normal
-                        vect point1 = new_voxel.position;
-                        vect point2 = {(i + 1)*voxel_size, j*voxel_size, height_map[i + 1][j], 1};
-                        vect point3 = {i*voxel_size, (j + 1)*voxel_size, height_map[i][j + 1], 1};
-                        new_voxel.normal = vector_normalize(vector_cross_product(vector_subtract(point1, point2), vector_subtract(point1, point3))); 
-                    }
-
-                    //Grass
-                    else 
-                    {
-                        new_voxel.colour = {0.008, 0.392, 0.251, 1.0};
-                        new_voxel.position.z = height_map[i][j];
-
-                        //Calculating Normal
-                        vect point1 = new_voxel.position;
-                        vect point2 = {(i + 1)*voxel_size, j*voxel_size, height_map[i + 1][j], 1};
-                        vect point3 = {i*voxel_size, (j + 1)*voxel_size, height_map[i][j + 1], 1};
-                        new_voxel.normal = vector_normalize(vector_cross_product(vector_subtract(point1, point2), vector_subtract(point1, point3))); 
-                    };
-
-                    //Add voxel to object 
-                    voxels.push_back(new_voxel); 
-
-                };
-            };
+            //Unbind the Array Object
+            glBindVertexArray(0);
         }; 
 
-        //Render Object Voxels
-        std::vector<voxel> project_voxels(camera camera, std::vector<voxel> voxel_projected)
+        //Clean up function
+        void clean_up()
         {
-            //Loop through the voxels and render the ones you want
-            for (auto voxs: voxels)
-            {   
-                //Apply Object Transformations (Do this with Matrices)
-                vect normal_direction = matrix_vector_multiplication(voxs.normal, rotation);
-                vect voxel_position = matrix_vector_multiplication(voxs.position, model);
+            glDeleteBuffers(3, VBO);
+            glDeleteVertexArrays(1, VAO);
 
-                //Remove Voxels behind objects (based on normal direction)
-                if (vector_dot_product(normal_direction, vector_subtract(voxel_position, camera.position)) < 0.0f)  
-                {
-                    // Apply Camera Rotation and Translation
-                    vect camera_view = matrix_vector_multiplication(voxel_position, camera.look_at);
-
-                    //This removes Voxels behind the camera (Invisible objects behind the camera???)
-                    if (camera_view.z < 0.0f)
-                    {
-                        //Projection
-                        vect result = matrix_vector_multiplication(camera_view, camera.projection);
-                        result = vector_divide(result, result.w);  
-
-                        //Storing the Projected Positions and other Voxel Characteristics 
-                        voxel temp; 
-
-                        //This is just to test
-                        temp.position.x = result.x; 
-                        temp.position.y = result.y; 
-                        temp.position.z = result.z; 
-
-                        //Calculating Voxel Size (I think I made this up: 1/(distance from camera)*screen_width*voxelsize) (Needs improvement)
-                        temp.size = 1/vector_magnitude(vector_subtract(camera.position, voxel_position))*screen_width*voxel_size*2; 
-
-                        //only create a object to calculate if in Camera View Space
-                        if (temp.position.x > -1 && temp.position.x < 1 && temp.position.y > -1 && temp.position.y < 1)
-                        {
-                            //Normalized Light Direction 
-                            vect light_direction =  vector_normalize({-0.4f, 0.5f, 0.0f});
-                            vect light_colour = {1.0f, 1.0f, 1.0f};
-
-                            ///Ambient Light 
-                            float ambient_light_strength = 0.2; 
-                            vect ambient_light = vector_multiply(light_colour, ambient_light_strength);
-
-                            //Difused Light 
-                            vect difused_light = vector_multiply(light_colour, std::max(0.0f, vector_dot_product(light_direction, normal_direction)));
-
-                            //Specular Light 
-                            float specular_strength = 0.01; 
-                            vect specular_light = vector_multiply(light_colour, pow(std::max(0.0f, vector_dot_product(vector_normalize(vector_subtract(camera.position, temp.position)), vector_reflect(light_direction, voxs.normal))), 32) * specular_strength); 
-
-                            //Total Light
-                            vect total_light = vector_add(vector_add(ambient_light, difused_light), specular_light); 
-
-                            //Looking Up the Colour from the Structure
-                            temp.colour = vector_colour_multiply(total_light, voxs.colour);
-
-                            //Stores Each Voxel
-                            voxel_projected.push_back(temp);
-                        };
-                    };
-                }; 
-            }; 
-
-            return voxel_projected;
-        };                                                                            
+            voxel_object.clear();
+        }
 }; 
 
 ////////////////
 //Shader Class//
 ////////////////
 class shader
-{
+{  
     public:
+        unsigned int shader_program;
+        GLuint ModelMatrixID;
+        GLuint ViewMatrixID;
+        GLuint ProjectionMatrixID;
+        GLuint ScalingFactorID;
+
         std::string read_file(std::string file_name)
         {
             //Open the text file in read mode and transfer the data 
@@ -654,8 +581,7 @@ class shader
                 file.open(error_log, std::ofstream::out | std::ofstream::trunc);
                 file << date_time << "/n" << message; 
 
-                //Clean Up 
-                glDeleteShader(shader_id);
+                printf(message);
 
                 return 0; 
             };
@@ -667,7 +593,7 @@ class shader
         unsigned int create_shaders(std::string vertex_shader, std::string fragment_shader)
         {   
             //Create the Overall Program
-            unsigned int shader_program = glCreateProgram(); 
+            shader_program = glCreateProgram(); 
 
             //Create and Compile the Shaders 
             static unsigned int vertex_shader_id = compile_shader(vertex_shader, GL_VERTEX_SHADER); 
@@ -686,112 +612,19 @@ class shader
             //Return the final program
             return shader_program; 
         }; 
-};
 
-/////////////////////
-//Writing to Screen//
-/////////////////////
-// void create_font_array(bool character_array[7][5][95], int index, const bool font_layout[7][5])
-// {
-//     for (int i = 0; i < 7; i++)
-//     {
-//         for (int j = 0; j < 5; j++)
-//         {
-//             character_array[i][j][index] = font_layout[i][j]; 
-//         };
-//     };
-// }; 
-
-void create_font_array_small(bool character_array[5][4][95], int index, const bool font_layout[5][4])
-{
-    for (int i = 0; i < 5; i++)
-    {
-        for (int j = 0; j < 4; j++)
+        void intialize_shader(float projection[4][4])
         {
-            character_array[i][j][index] = font_layout[i][j]; 
+            //Setup the ID for the transformation matrices in the shader
+            ModelMatrixID = glGetUniformLocation(shader_program, "ModelMatrix");
+            ViewMatrixID = glGetUniformLocation(shader_program, "ViewMatrix");
+            ProjectionMatrixID = glGetUniformLocation(shader_program, "ProjectionMatrix"); //Not really necessery unless camaera parameters are to be changed mid-game
+
+            //Assign the projection matrix as it is a constant at runtime
+            glUniformMatrix4fv(ProjectionMatrixID, 1, GL_FALSE, &projection[0][0]);
+
         };
-    };
-}; 
-
-void initialize_font()
-{
-    //Move the characters into a big array 
-    // create_font_array(character_array, ' ' - 32,  blk); 
-    // create_font_array(character_array, '0' - 32,  zer); 
-    // create_font_array(character_array, '1' - 32,  one); 
-    // create_font_array(character_array, '2' - 32,  two); 
-    // create_font_array(character_array, '3' - 32,  thr); 
-    // create_font_array(character_array, '4' - 32,  fur); 
-    // create_font_array(character_array, '5' - 32,  fiv); 
-    // create_font_array(character_array, '6' - 32,  six); 
-    // create_font_array(character_array, '7' - 32,  sev); 
-    // create_font_array(character_array, '8' - 32,  eig);
-    // create_font_array(character_array, '9' - 32,  nin);
-    // create_font_array(character_array, 'a' - 32,  lca);
-    // create_font_array(character_array, 'Q' - 32,  cpq);
-    // create_font_array(character_array, 'W' - 32,  cpw);
-    // create_font_array(character_array, 'X' - 32,  cpx);
-    // create_font_array(character_array, 'Y' - 32,  cpy);
-    // create_font_array(character_array, 'Z' - 32,  cpz);
-    // create_font_array(character_array, ':' - 32,  col);
-    // create_font_array(character_array, '.' - 32,  stp);
-    // create_font_array(character_array, '-' - 32,  neg);    
-
-    //Move the characters into a big array  
-    create_font_array_small(small_character_array, ' ' - 32,  sml_blk); 
-    create_font_array_small(small_character_array, '0' - 32,  sml_zer); 
-    create_font_array_small(small_character_array, '1' - 32,  sml_one); 
-    create_font_array_small(small_character_array, '2' - 32,  sml_two); 
-    create_font_array_small(small_character_array, '3' - 32,  sml_thr); 
-    create_font_array_small(small_character_array, '4' - 32,  sml_fur); 
-    create_font_array_small(small_character_array, '5' - 32,  sml_fiv); 
-    create_font_array_small(small_character_array, '6' - 32,  sml_six); 
-    create_font_array_small(small_character_array, '7' - 32,  sml_sev); 
-    create_font_array_small(small_character_array, '8' - 32,  sml_eig);
-    create_font_array_small(small_character_array, '9' - 32,  sml_nin);
 };
-
-std::vector<voxel> write_to_screen(std::vector<voxel> voxel_projected, bool character_array[5][4][95], std::string message, float position_x, float position_y, float font_size, colr colour)
-{
-    //Moving from screen co-oridinates to OpenGl co-oridinates
-    position_x = position_x - screen_width; 
-    position_y = position_y - screen_height; 
-
-    //For each Character in the String
-    for(char& character: message)
-    {   
-        //Selecting Character
-        int index = character - 32; 
-
-        //Add the voxel_projected 
-        for (int i = 0; i < 5; i++)
-        {
-            for (int j = 0; j < 4; j++)
-            {   
-                if (character_array[i][j][index] == 1)
-                {
-                    //Creating the voxel 
-                    voxel temp;
-                    
-                    //Character Positions
-                    temp.position.x = (position_x + j*font_size)/screen_width; 
-                    temp.position.y = (position_y + i*font_size)/screen_height; 
-                    temp.position.z = 10000; 
-                    temp.size = font_size; 
-                    temp.colour = colour; 
-
-                    //Add the voxel to the list 
-                    voxel_projected.push_back(temp); 
-                }; 
-            };
-        };
-
-        //Update x position for each letter
-        position_x += 6*font_size; 
-    };  
-
-    return voxel_projected; 
-}
 
 //The main function 
 int main(int argc, char *argv[]) 
@@ -801,32 +634,35 @@ int main(int argc, char *argv[])
     ///////////////
     //Asset Setup//
     ///////////////
-    
-    //Create Terrrain
-    printf("Creating Terrain...  \n"); 
-
-    // float height_map[terrain_size][terrain_size];
-    // generate_terrain(terrain_size, terrain_size, terrain_size, 3.0, 1, height_map, 1);
-    // object terrain; 
-    // terrain.terrain_voxelization(height_map);
-
-    //Initialize font 
-    initialize_font(); 
 
     //This creates a camera for the world 
     camera camera;
     camera.position = {0.0, 0.0, 0}; 
     camera.intialize_projection_matrix(); 
-    camera.intialize_HUD(); 
 
     //This creates and Object asigns a mesh to it and then voxelizes that mesh
     printf("Creating Game Assets...  \n"); 
 
-    object test1; 
-    test1.polygon_mesh.load_mesh("meshes/bunny.obj");
-    test1.voxelization("bunny_", 1);  
-    test1.quaternion = {0, 0.7068252, 0, 0.7073883}; 
-    test1.position =  {-0.75, -0.75, -2};
+    int object_number = 4;
+    object game_objects[(int) pow(object_number, 3)];
+
+    //Create Objects
+    int iter = 0;
+    for(int i = 0; i < object_number; i++)
+    {
+        for(int j = 0; j < object_number; j++)
+        {
+            for(int k = 0; k < object_number; k++)
+            {
+                game_objects[iter].polygon_mesh.load_mesh("meshes/bunny.obj");
+                game_objects[iter].voxelization("bunny_", 1); 
+                game_objects[iter].quaternion = {0, 0.7068252, 0, 0.7073883}; 
+                game_objects[iter].position =  {(float) i * 2, (float) j * 2, (float) k * 2};
+
+                iter++;
+            };
+        };
+    };
 
     /////////////////////////
     //Setting up SDL/OpenGL//
@@ -849,8 +685,7 @@ int main(int argc, char *argv[])
     printf("Intializing GLEW...  \n"); 
 
     glewInit(); 
-    glEnable(GL_DEPTH_TEST);
-    //glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);;
      
     glClearColor(0.0, 0.0, 0.0, 1.0); 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
@@ -862,115 +697,19 @@ int main(int argc, char *argv[])
     printf("Compiling Shader Programs...  \n"); 
     
     shader shader;
-    static unsigned int shader_program = shader.create_shaders("shaders/vertex.glsl", "shaders/fragment.glsl");
-    glUseProgram(shader_program);
+    shader.create_shaders("shaders/vertex.glsl", "shaders/fragment.glsl");
+    glUseProgram(shader.shader_program);
+    shader.intialize_shader(camera.projection);
 
-    ////////////////////////
-    //Intializing Textures//
-    ////////////////////////
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_NEAREST);
-    
-    //////////////////////////////
-    //Intializing Voxel VBOs VAO//
-    //////////////////////////////
+    //////////////////////
+    //Intializing Assets//
+    //////////////////////
+    printf("Initialising Assets...  \n"); 
 
-    printf("Creating VAO and VBOs...  \n"); 
-
-    //This stores the vertex data for the mesh 
-    const GLfloat voxel[4][3] =
+    for(int i = 0; i < pow(object_number, 3); i++)
     {
-        { -0.5, (GLfloat) 0.5 / aspect_ratio,  0.5 },
-        { 0.5,  (GLfloat) 0.5 / aspect_ratio,  0.5 }, 
-        { 0.5,  (GLfloat) -0.5 / aspect_ratio, 0.5 },
-        { -0.5, (GLfloat) -0.5 / aspect_ratio, 0.5 }, 
+        game_objects[i].initialise();
     };
-
-    //Setup some Memory flags to enable geometery steaming
-    GLbitfield fMap = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
-    GLbitfield fCreate = fMap | GL_DYNAMIC_STORAGE_BIT;
-
-    //Memory Address to the VAO and VBO
-    unsigned int VAO[1]; 
-    unsigned int VBO[3];
-    
-    //Create the VAO and VBO
-    glGenBuffers(3, VBO);
-    glGenVertexArrays(1, VAO); 
-
-    //Set the VAO to the current use item
-    glBindVertexArray(VAO[0]); 
-
-    ////////////////////////////////////////
-    //Generate the VBO to store voxel data//
-    ////////////////////////////////////////
-
-    // Bind our first VBO as being the active buffer and storing vertex attributes (coordinates)
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
-    
-    // Copy the vertex data from dice to our buffer (4 and 3 are size of mesh array)
-    uint32_t buffer_size =  (4 * 3) * sizeof(GLfloat);
-
-    //glBufferStorage(GL_ARRAY_BUFFER, buffer_size, voxel, fCreate);
-    glBufferData(GL_ARRAY_BUFFER, buffer_size, voxel, GL_STATIC_DRAW);
-
-    //This tells OpenGL the data layout
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
-
-    //Enable the VBO within the VAO 
-    glEnableVertexAttribArray(0);
-
-    //////////////////////////////////////////////
-    //Generate the VBO to store translation data//
-    //////////////////////////////////////////////
-
-    //Assigning Buffer Address
-    static const size_t translation_size = world_voxel_limit * sizeof(vect);
-    float *translation_data = (float*) malloc(translation_size);
-
-    // Bind our first VBO as being the active buffer and storing vertex translations
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-    
-    // Copy the vertex data from dice to our buffer 
-    glBufferStorage(GL_ARRAY_BUFFER, translation_size, &translation_data[0], fCreate);
-
-    //This tells OpenGL the data layout
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(vect), 0); 
-    
-    //Enable the VBO withing the VAO 
-    glEnableVertexAttribArray(1);
-
-    //Important for instanced rendering 
-    glVertexAttribDivisor(1, 1);
-
-    translation_data = (float*) glMapBufferRange(GL_ARRAY_BUFFER, 0, translation_size, fMap);
-
-    /////////////////////////////////////////
-    //Generate the VBO to store colour data//
-    /////////////////////////////////////////
-
-    //Assigning Buffer Address
-    static const size_t colour_size = world_voxel_limit * sizeof(colr);
-    float *colour_data = (float*) malloc(colour_size);
-
-    // Bind our first VBO as being the active buffer and storing vertex colours
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
-    
-    // Copy the vertex data from dice to our buffer 
-    glBufferStorage(GL_ARRAY_BUFFER, colour_size, &colour_data[0], fCreate);
-
-    //This tells OpenGL the data layout
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(colr), 0); 
-    
-    //Enable the VBO withing the VAO 
-    glEnableVertexAttribArray(2);
-
-    //Important for instanced rendering 
-    glVertexAttribDivisor(2, 1);
-
-    colour_data = (float*) glMapBufferRange(GL_ARRAY_BUFFER, 0, colour_size, fMap);
-
-    //unbind the VAO as we are finished with it for now
-    glBindVertexArray(0);
 
     /////////////
     //Main Loop//
@@ -981,19 +720,19 @@ int main(int argc, char *argv[])
     float time_elapsed = 0; 
 
     //Defining Exit condition
-    bool run = 1;  
+    bool run = true;  
     int counter = 0;
 
     printf("Entering Game Loop...  \n"); 
 
-    while (run == 1)
+    while (run == true)
     {
         //SDL Loop Conditions (Key Presses)
         while (SDL_PollEvent(&window_event)){
             switch( window_event.type ){
                 case SDL_QUIT:
                     printf("\nQuiting Game...  \n"); 
-                    run = 0;
+                    run = false;
                     break;
 
                 // Look for a keypress
@@ -1097,93 +836,47 @@ int main(int argc, char *argv[])
             }
         };
 
+        ///////////////
+        //Update Call//
+        ///////////////
+
         //Updating Time (in seconds)
         time_elapsed = (SDL_GetTicks() - game_time)/1000;
         game_time = SDL_GetTicks();
 
         //Updating Positions and Angles
-        delta_angle.x = (pitch_up_speed - pitch_down_speed)*time_elapsed; 
+        delta_angle.x = -(pitch_up_speed - pitch_down_speed)*time_elapsed; 
         delta_angle.y = (yaw_right_speed - yaw_left_speed)*time_elapsed;
-        delta_angle.z = -(roll_right_speed - roll_left_speed)*time_elapsed;
+        delta_angle.z = (roll_right_speed - roll_left_speed)*time_elapsed;
 
-        delta_position.x = (left_speed - right_speed)*time_elapsed;
+        delta_position.x = -(left_speed - right_speed)*time_elapsed;
         delta_position.y = -(down_speed - up_speed)*time_elapsed; 
-        delta_position.z = (backward_speed - foward_speed)*time_elapsed;
+        delta_position.z = -(backward_speed - foward_speed)*time_elapsed;
     
         //Updating the Camera Object 
         camera.update(delta_angle, delta_position);
 
-        //Write to screen average FPS
-        fps_counter ++; fps_timer += time_elapsed; 
-        if(fps_timer > 0.3) 
+        //Update attitude
+        for(int i = 0; i <  pow(object_number, 3); i++)
         {
-            avg_fps = (int) fps_counter/fps_timer; 
-            fps_timer = 0; fps_counter = 0; 
-            avg_vox = temp_voxel_limit; 
-        }
-        
-        //Render Writing to Screen 
-        voxel_projected = write_to_screen(voxel_projected, small_character_array, std::to_string((int) avg_fps), 10.0f,                10.0f, font_size, {1, 1, 1, 1});
-        voxel_projected = write_to_screen(voxel_projected, small_character_array, std::to_string((int) avg_vox), 10.0f, screen_height*2 - 50, font_size, {1, 1, 1, 1});
-
-        //Render HUD to Screen
-        voxel_projected = camera.render_HUD(voxel_projected, -screen_width/2 - 150, -900, font_size, {1, 1, 1, 1}); 
-
-        //Project the terrain voxels 
-        //voxel_projected = terrain.project_voxels(camera, voxel_projected); 
-
-        //Render and update attitude
-        test1.update_position_attitude({0.00, 0.001, 0.00}, {0.0, 0.0, 0});
-        voxel_projected = test1.project_voxels(camera, voxel_projected);
-
-        //Render Setup
-        counter = 0;
-
-        for(auto voxels : voxel_projected)
-        {   
-            if (counter < world_voxel_limit)
-            {
-                //Not sure why but that "1/" is needed. Probable becuase it cant be a value larger than 1
-                translation_data[counter*4]     = voxels.position.x;
-                translation_data[counter*4 + 1] = voxels.position.y;
-                translation_data[counter*4 + 2] = 1/voxels.position.z;
-                translation_data[counter*4 + 3] = voxels.size/(screen_width);
-
-                colour_data[counter*4]     = voxels.colour.r;
-                colour_data[counter*4 + 1] = voxels.colour.g;
-                colour_data[counter*4 + 2] = voxels.colour.b;
-                colour_data[counter*4 + 3] = voxels.colour.a;
-
-                counter++; 
-            }
-            else 
-            {
-                break; 
-            }
-        }
-
-        //Record how many voxels were used
-        temp_voxel_limit = counter; 
-
-        //Clear the stored voxels 
-        voxel_projected.clear(); 
+            game_objects[i].update_position_attitude({0.00, 0.00, 0.00}, {0.0, 0.0, 0});
+        };
 
         ///////////////
         //Render Call//
         ///////////////
 
-        glBindVertexArray(VAO[0]);
-
         //OpenGL Clear Render
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //Instanced Array
-        glDrawArraysInstanced(GL_QUADS, 0, 4, temp_voxel_limit);
+        //Render Object
+        for(int i = 0; i <  pow(object_number, 3); i++)
+        {
+            game_objects[i].render(shader.ModelMatrixID, shader.ViewMatrixID, camera.look_at);
+        }
 
         //Swap Rendering Buffers
         SDL_GL_SwapWindow(window);
-
-        glBindVertexArray(0);
     };
     
     ///////////////////
@@ -1192,19 +885,18 @@ int main(int argc, char *argv[])
 
     printf("Deleting Assets... \n"); 
 
+    for(int i = 0; i < pow(object_number, 3); i++)
+    {
+        game_objects[i].clean_up();
+    }
+
     //Cleanup OpenGL Assets
-    glDeleteBuffers(3, VBO);
-    glDeleteVertexArrays(1, VAO);
-    glDeleteProgram(shader_program); 
+    glDeleteProgram(shader.shader_program); 
 
     //Cleanup SDL Assets
     SDL_GL_DeleteContext(context); 
     SDL_DestroyWindow(window);
     SDL_Quit();
-
-    //Free buffer data
-    free(translation_data);
-    free(colour_data);
 
     printf("Closing... \n"); 
 
